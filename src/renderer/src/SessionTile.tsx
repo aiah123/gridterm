@@ -2,10 +2,13 @@ import { CSSProperties, useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
+import { unescapePayload } from './osc'
 
 interface Props {
   id: number
   name: string
+  cwd: string | null
+  refocus: number
   active: boolean
   focused: boolean
   renaming: boolean
@@ -25,7 +28,7 @@ const theme = {
 }
 
 export function SessionTile(props: Props) {
-  const { id, name, active, focused, renaming, style } = props
+  const { id, name, cwd, active, focused, renaming, style } = props
   const hostRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
 
@@ -53,6 +56,14 @@ export function SessionTile(props: Props) {
     }
     termRef.current = term
 
+    // Shell integration events: ESC ] 7770 ; kind ; payload BEL
+    const osc = term.parser.registerOscHandler(7770, (data) => {
+      const sep = data.indexOf(';')
+      if (sep === -1) return true
+      window.gridterm.contextEvent(id, data.slice(0, sep), unescapePayload(data.slice(sep + 1)))
+      return true
+    })
+
     const offData = window.gridterm.onData(id, (d) => term.write(d))
     const input = term.onData((d) => window.gridterm.write(id, d))
 
@@ -74,6 +85,7 @@ export function SessionTile(props: Props) {
       clearTimeout(timer)
       ro.disconnect()
       input.dispose()
+      osc.dispose()
       offData()
       term.dispose()
       termRef.current = null
@@ -85,7 +97,7 @@ export function SessionTile(props: Props) {
   useEffect(() => {
     if (active && !renaming) termRef.current?.focus()
     else termRef.current?.blur()
-  }, [active, focused, renaming])
+  }, [active, focused, renaming, props.refocus])
 
   return (
     <div
@@ -98,7 +110,10 @@ export function SessionTile(props: Props) {
         {renaming ? (
           <RenameInput initial={name} onDone={props.onRename} onCancel={props.onCancelRename} />
         ) : (
-          name
+          <>
+            {name}
+            {cwd && <span className="cwd"> — {cwd}</span>}
+          </>
         )}
       </div>
       <div

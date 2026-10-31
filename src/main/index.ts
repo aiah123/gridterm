@@ -1,16 +1,54 @@
-import { app, BrowserWindow, ipcMain, Menu, MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, MenuItemConstructorOptions, shell } from 'electron'
+import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { SessionManager } from './sessionManager'
 import { defaultBindings, matchBinding } from './keymap'
-import type { AppCommand } from '../shared/api'
+import { ContextTracker } from './contextTracker'
+import type { AppCommand, FileReadResult } from '../shared/api'
 
 const isMac = process.platform === 'darwin'
 let win: BrowserWindow | null = null
 
-const sessions = new SessionManager({
-  onData: (id, data) => win?.webContents.send('pty:data', id, data),
-  onExit: (id, code) => win?.webContents.send('pty:exit', id, code)
-})
+const integrationDir = app.isPackaged
+  ? path.join(process.resourcesPath, 'shell-integration')
+  : path.join(__dirname, '../../resources/shell-integration')
+
+const sessions = new SessionManager(
+  {
+    onData: (id, data) => win?.webContents.send('pty:data', id, data),
+    onExit: (id, code) => {
+      tracker.remove(id)
+      win?.webContents.send('pty:exit', id, code)
+    }
+  },
+  integrationDir
+)
+
+const tracker = new ContextTracker(
+  (id, ctx) => win?.webContents.send('ctx:update', id, ctx),
+  () => sessions.list()
+)
+
+const MAX_PREVIEW_BYTES = 512 * 1024
+
+async function readPreview(p: string): Promise<FileReadResult> {
+  // Only files that appear in a session's context can be read.
+  if (!tracker.isKnownFile(p)) return { ok: false, error: 'File is not in any session context.' }
+  try {
+    const handle = await fs.open(p, 'r')
+    try {
+      const { size } = await handle.stat()
+      const buf = Buffer.alloc(Math.min(size, MAX_PREVIEW_BYTES))
+      await handle.read(buf, 0, buf.length, 0)
+      if (buf.subarray(0, 8000).includes(0)) return { ok: false, error: 'Binary file — no preview.' }
+      return { ok: true, text: buf.toString('utf8'), truncated: size > buf.length, size }
+    } finally {
+      await handle.close()
+    }
+  } catch (e) {
+    return { ok: false, error: (e as Error).message }
+  }
+}
 
 function send(command: AppCommand): void {
   win?.webContents.send('app:command', command)
@@ -106,10 +144,17 @@ ipcMain.on('pty:write', (_e, id: number, data: string) => sessions.write(id, dat
 ipcMain.on('pty:resize', (_e, id: number, cols: number, rows: number) => sessions.resize(id, cols, rows))
 ipcMain.on('pty:kill', (_e, id: number) => sessions.kill(id))
 ipcMain.on('app:close-window', () => win?.close())
+ipcMain.on('ctx:event', (_e, id: number, kind: string, payload: string) => void tracker.handleEvent(id, kind, payload))
+ipcMain.on('ctx:remove-file', (_e, id: number, p: string) => tracker.removeFile(id, p))
+ipcMain.handle('file:read', (_e, p: string) => readPreview(p))
+ipcMain.on('file:reveal', (_e, p: string) => {
+  if (tracker.isKnownFile(p)) shell.showItemInFolder(p)
+})
 
 app.whenReady().then(() => {
   buildMenu()
   createWindow()
+  tracker.start()
   app.on('activate', () => {
     if (!win) createWindow()
   })

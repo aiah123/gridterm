@@ -12,7 +12,8 @@
     "postinstall": "electron-builder install-app-deps",
     "dist:mac": "electron-vite build && electron-builder --mac",
     "dist:linux": "electron-vite build && electron-builder --linux",
-    "test:e2e": "node e2e/smoke.cjs"
+    "test:e2e": "node e2e/smoke.cjs",
+    "test:e2e:context": "node e2e/context.cjs bash && node e2e/context.cjs zsh"
   },
   "keywords": [],
   "author": "",
@@ -57,6 +58,15 @@
         "deb"
       ],
       "category": "Development"
-    }
+    },
+    "extraResources": [
+      {
+        "from": "resources/shell-integration",
+        "to": "shell-integration",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ]
   }
 }

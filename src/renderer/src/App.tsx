@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { AppCommand } from '../../shared/api'
+import type { AppCommand, SessionContext } from '../../shared/api'
 import { computeLayout, Direction, neighbor } from './layout'
 import { SessionTile } from './SessionTile'
 import { ContextPanel } from './ContextPanel'
+import { FilePreview } from './FilePreview'
 
 export interface Session {
   id: number
@@ -14,6 +15,10 @@ export function App() {
   const [activeId, setActiveId] = useState<number | null>(null)
   const [focusedId, setFocusedId] = useState<number | null>(null)
   const [renamingId, setRenamingId] = useState<number | null>(null)
+  const [contexts, setContexts] = useState<Record<number, SessionContext>>({})
+  const [preview, setPreview] = useState<string | null>(null)
+  // Bumped to hand keyboard focus back to the active terminal.
+  const [refocus, setRefocus] = useState(0)
   const counter = useRef(0)
 
   // Latest state for IPC callbacks registered once.
@@ -76,11 +81,16 @@ export function App() {
       else if (active === id) setActiveId(next[Math.min(idx, next.length - 1)].id)
     })
     const offCmd = window.gridterm.onCommand(handleCommand)
+    const offCtx = window.gridterm.onContext((id, ctx) => setContexts((c) => ({ ...c, [id]: ctx })))
     return () => {
       offExit()
       offCmd()
+      offCtx()
     }
   }, [newSession])
+
+  // Closing focus mode or switching sessions closes the preview.
+  useEffect(() => setPreview(null), [focusedId])
 
   const layout = computeLayout(sessions.length)
   const focused = sessions.find((s) => s.id === focusedId) ?? null
@@ -101,6 +111,8 @@ export function App() {
               key={s.id}
               id={s.id}
               name={s.name}
+              cwd={contexts[s.id]?.cwdDisplay ?? null}
+              refocus={refocus}
               active={s.id === activeId}
               focused={s.id === focusedId}
               renaming={s.id === renamingId}
@@ -132,7 +144,24 @@ export function App() {
               setFocusedId(null)
             }}
           />
-          <ContextPanel session={focused} />
+          <ContextPanel
+            session={focused}
+            context={contexts[focused.id]}
+            onPreview={setPreview}
+            onInsert={(text) => {
+              setPreview(null)
+              window.gridterm.write(focused.id, text)
+            }}
+          />
+          {preview && (
+            <FilePreview
+              path={preview}
+              onClose={() => {
+                setPreview(null)
+                setRefocus((n) => n + 1)
+              }}
+            />
+          )}
         </>
       )}
     </>

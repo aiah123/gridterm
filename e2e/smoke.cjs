@@ -41,12 +41,12 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + name); if 
   await w.keyboard.press('Control+A');
   await w.keyboard.type('server');
   await w.keyboard.press('Enter');
-  ok('rename via double-click', (await w.textContent('.tile[data-session-id="2"] .title')).trim() === 'server');
+  ok('rename via double-click', (await w.textContent('.tile[data-session-id="2"] .title')).trim().startsWith('server'));
   ok('renamed tile is active', await active() === '2');
   // Rename via shortcut + Escape cancels
   await key('Control+Shift+KeyR'); await w.waitForSelector('.rename');
   await w.keyboard.type('xxx'); await w.keyboard.press('Escape');
-  ok('escape cancels rename', (await w.textContent('.tile[data-session-id="2"] .title')).trim() === 'server');
+  ok('escape cancels rename', (await w.textContent('.tile[data-session-id="2"] .title')).trim().startsWith('server'));
   // typing goes back to the terminal after rename
   await w.keyboard.type('echo typed-$((2+3))\n'); await w.waitForTimeout(500);
   ok('terminal gets keys after rename', /typed-5/.test(await w.innerText('.tile[data-session-id="2"] .xterm-rows').catch(() => '')));

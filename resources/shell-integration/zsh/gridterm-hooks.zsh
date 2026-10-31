@@ -1,0 +1,28 @@
+# Gridterm zsh hooks.
+[[ -n $_gt_installed ]] && return
+typeset -g _gt_installed=1 _gt_ran=0
+
+_gt_osc() {
+  local s=$2
+  s=${s//\\/\\\\}
+  s=${s//$'\n'/\\n}
+  s=${s//$'\e'/\\e}
+  s=${s//$'\a'/\\a}
+  builtin printf '\e]7770;%s;%s\a' "$1" "$s"
+}
+
+_gt_preexec() {
+  _gt_ran=1
+  _gt_osc cmd "$1"   # $1 is the command line as typed
+}
+
+_gt_precmd() {
+  local ec=$?
+  (( _gt_ran )) && _gt_osc done $ec
+  _gt_ran=0
+  _gt_osc cwd "$PWD"
+}
+
+autoload -Uz add-zsh-hook
+add-zsh-hook preexec _gt_preexec
+add-zsh-hook precmd _gt_precmd

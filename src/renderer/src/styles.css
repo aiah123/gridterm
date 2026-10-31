@@ -132,3 +132,125 @@ html, body, #root {
 @media (prefers-reduced-motion: reduce) {
   .backdrop, .tile.focused, .context-panel { animation: none; }
 }
+
+/* ---- Context ---- */
+.title .cwd { color: #6f6f6f; }
+.tile.active .title .cwd { color: #9a9a9a; }
+
+.ctx-cwd {
+  font: 12px Menlo, "DejaVu Sans Mono", monospace;
+  color: #9cdcfe;
+  word-break: break-all;
+}
+
+.ctx-list { list-style: none; margin: 0; padding: 0; }
+.ctx-list button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.ctx-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  margin: 0 -6px;
+  border-radius: 4px;
+}
+.ctx-file:hover { background: #2f2f31; }
+.ctx-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ctx-name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctx-sub { font-size: 11px; color: #7a7a7a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctx-actions { display: none; gap: 4px; flex: none; }
+.ctx-file:hover .ctx-actions { display: flex; }
+.ctx-actions button {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: #3a3a3d;
+  color: #ccc;
+}
+.ctx-actions button:hover { background: var(--active); color: #fff; }
+
+.ctx-cmd {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 6px !important;
+  margin: 0 -6px;
+  border-radius: 4px;
+}
+.ctx-cmd:hover { background: #2f2f31; }
+.ctx-cmd code {
+  font: 12px Menlo, "DejaVu Sans Mono", monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 3.6em;
+  overflow: hidden;
+}
+.badge {
+  flex: none;
+  min-width: 18px;
+  font-size: 10px;
+  text-align: center;
+  border-radius: 3px;
+  padding: 1px 3px;
+}
+.badge.ok { color: #89d185; }
+.badge.fail { color: #fff; background: #a1260d; }
+.badge.running { color: #ccc; }
+
+/* ---- File preview (sits exactly over the focused tile) ---- */
+.preview {
+  position: fixed;
+  z-index: 30;
+  top: var(--focus-inset);
+  left: var(--focus-inset);
+  bottom: var(--focus-inset);
+  right: calc(var(--focus-inset) * 1.5 + var(--panel-width));
+  display: flex;
+  flex-direction: column;
+  background: #1b1b1c;
+  border: 1px solid var(--active);
+  border-radius: 6px;
+  outline: none;
+  overflow: hidden;
+  animation: fade-in 120ms ease-out;
+}
+.preview-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 10px;
+  font-size: 12px;
+  color: var(--title-active-fg);
+  background: #252526;
+  border-bottom: 1px solid var(--border);
+}
+.preview-path { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-header button {
+  font-size: 16px;
+  line-height: 1;
+  color: #ccc;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.preview-body { flex: 1; overflow: auto; padding: 8px 0; color: #d4d4d4; }
+.preview-body .muted { padding: 0 12px; }
+.preview-body pre { margin: 0; font: 12.5px/1.45 Menlo, "DejaVu Sans Mono", monospace; }
+.preview-body .line { display: flex; white-space: pre; }
+.preview-body .ln {
+  flex: none;
+  width: 4.5em;
+  padding-right: 1em;
+  text-align: right;
+  color: #5a5a5a;
+  user-select: none;
+}

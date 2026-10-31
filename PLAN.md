@@ -24,11 +24,14 @@
 | M1 ✅ | Even grid, new/close session, click to activate, resizing |
 | M2 ✅ | Session names and renaming, keyboard navigation |
 | M3 ✅ | Focus mode with click outside to exit |
-| M4 | zsh/bash shell integration (injected through a `ZDOTDIR` wrapper / `--rcfile`) |
-| M5 | Context panel and file preview |
+| M4 ✅ | zsh/bash shell integration (injected through a `ZDOTDIR` wrapper / `--rcfile`) |
+| M5 ✅ | Context panel and file preview (plain text; syntax highlighting later) |
 | M6 | Config file, themes, settings screen |
 | M7 | Save and restore sessions, polish |
 | M8 | Signed and notarized `.dmg`, AppImage/deb |
+
+## Known issues found while building
+- On Linux, node-pty leaks Electron's open file handles into the shell. Gridterm now starts the shell through a small bash launcher that closes them first; the process ID stays the same. macOS is not affected.
 
 ## Risks
 - Shortcut conflicts: app shortcuts always use modifier combinations and can be remapped.

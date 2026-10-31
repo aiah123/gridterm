@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppCommand, GridtermApi } from '../shared/api'
+import type { AppCommand, GridtermApi, SessionContext } from '../shared/api'
 
 // Output can arrive before the tile has mounted and subscribed (e.g. the first
 // prompt), so buffer it per session and replay on subscribe.
@@ -43,7 +43,16 @@ const api: GridtermApi = {
     ipcRenderer.on('app:command', h)
     return () => ipcRenderer.removeListener('app:command', h)
   },
-  closeWindow: () => ipcRenderer.send('app:close-window')
+  closeWindow: () => ipcRenderer.send('app:close-window'),
+  contextEvent: (id, kind, payload) => ipcRenderer.send('ctx:event', id, kind, payload),
+  onContext(cb) {
+    const h = (_e: unknown, id: number, ctx: SessionContext) => cb(id, ctx)
+    ipcRenderer.on('ctx:update', h)
+    return () => ipcRenderer.removeListener('ctx:update', h)
+  },
+  removeFile: (id, p) => ipcRenderer.send('ctx:remove-file', id, p),
+  readFile: (p) => ipcRenderer.invoke('file:read', p),
+  revealFile: (p) => ipcRenderer.send('file:reveal', p)
 }
 
 contextBridge.exposeInMainWorld('gridterm', api)
