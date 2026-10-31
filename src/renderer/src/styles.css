@@ -1,0 +1,60 @@
+:root {
+  --bg: #141414;
+  --tile-bg: #1e1e1e;
+  --border: #333;
+  --active: #3b8eea;
+  --title-fg: #9a9a9a;
+  --title-active-fg: #e6e6e6;
+  --gap: 4px;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Ubuntu, sans-serif;
+}
+
+.grid {
+  display: grid;
+  gap: var(--gap);
+  padding: var(--gap);
+  height: 100%;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--tile-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.tile.active { border-color: var(--active); box-shadow: 0 0 0 1px var(--active); }
+
+.title {
+  flex: none;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--title-fg);
+  background: #252526;
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tile.active .title { color: var(--title-active-fg); }
+
+.term {
+  flex: 1;
+  min-height: 0;
+  padding: 4px 0 0 6px;
+}
