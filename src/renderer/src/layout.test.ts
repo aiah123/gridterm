@@ -35,3 +35,35 @@ describe('computeLayout', () => {
     expect(placements[2].colSpan).toBe(placements[0].colSpan * 2)
   })
 })
+
+import { neighbor } from './layout'
+
+describe('neighbor', () => {
+  it('moves within a row and stops at edges', () => {
+    const l = computeLayout(4) // 2x2
+    expect(neighbor(l, 0, 'right')).toBe(1)
+    expect(neighbor(l, 1, 'right')).toBe(1)
+    expect(neighbor(l, 0, 'left')).toBe(0)
+    expect(neighbor(l, 2, 'left')).toBe(2)
+  })
+
+  it('moves between rows', () => {
+    const l = computeLayout(4)
+    expect(neighbor(l, 0, 'down')).toBe(2)
+    expect(neighbor(l, 3, 'up')).toBe(1)
+    expect(neighbor(l, 0, 'up')).toBe(0)
+  })
+
+  it('handles a stretched last row', () => {
+    const l = computeLayout(3) // [0][1] / [   2   ]
+    expect(neighbor(l, 0, 'down')).toBe(2)
+    expect(neighbor(l, 1, 'down')).toBe(2)
+    expect(neighbor(l, 2, 'up')).toBe(1) // centre of the wide tile falls in tile 1's half
+    const l5 = computeLayout(5) // [0][1][2] / [3 ][4 ]
+    expect(neighbor(l5, 1, 'down')).toBe(4) // centre on the boundary goes right
+    expect(neighbor(l5, 0, 'down')).toBe(3)
+    expect(neighbor(l5, 2, 'down')).toBe(4)
+    expect(neighbor(l5, 3, 'up')).toBe(0)
+    expect(neighbor(l5, 4, 'up')).toBe(2)
+  })
+})

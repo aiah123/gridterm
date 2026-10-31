@@ -1,4 +1,4 @@
-import { CSSProperties, useEffect, useRef } from 'react'
+import { CSSProperties, useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
@@ -7,7 +7,13 @@ interface Props {
   id: number
   name: string
   active: boolean
+  focused: boolean
+  renaming: boolean
   onActivate(): void
+  onEnterFocus(): void
+  onStartRename(): void
+  onRename(name: string): void
+  onCancelRename(): void
   style: CSSProperties
 }
 
@@ -18,7 +24,8 @@ const theme = {
   selectionBackground: '#264f78'
 }
 
-export function SessionTile({ id, name, active, onActivate, style }: Props) {
+export function SessionTile(props: Props) {
+  const { id, name, active, focused, renaming, style } = props
   const hostRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
 
@@ -73,21 +80,65 @@ export function SessionTile({ id, name, active, onActivate, style }: Props) {
     }
   }, [id])
 
-  // Only the active tile receives keyboard input.
+  // Only the active tile receives keyboard input. Re-run when focus mode or
+  // renaming changes, since those move keyboard focus away from the terminal.
   useEffect(() => {
-    if (active) termRef.current?.focus()
+    if (active && !renaming) termRef.current?.focus()
     else termRef.current?.blur()
-  }, [active])
+  }, [active, focused, renaming])
 
   return (
     <div
-      className={`tile${active ? ' active' : ''}`}
+      className={`tile${active ? ' active' : ''}${focused ? ' focused' : ''}`}
       style={style}
       data-session-id={id}
-      onMouseDown={onActivate}
+      onMouseDown={props.onActivate}
     >
-      <div className="title">{name}</div>
-      <div className="term" ref={hostRef} />
+      <div className="title" onDoubleClick={props.onStartRename} title="Double-click to rename">
+        {renaming ? (
+          <RenameInput initial={name} onDone={props.onRename} onCancel={props.onCancelRename} />
+        ) : (
+          name
+        )}
+      </div>
+      <div
+        className="term"
+        ref={hostRef}
+        onDoubleClick={() => {
+          if (!focused) props.onEnterFocus()
+        }}
+      />
     </div>
+  )
+}
+
+function RenameInput(props: { initial: string; onDone(name: string): void; onCancel(): void }) {
+  const [value, setValue] = useState(props.initial)
+  const ref = useRef<HTMLInputElement>(null)
+  const done = useRef(false)
+  useEffect(() => {
+    ref.current?.focus()
+    ref.current?.select()
+  }, [])
+  const finish = (save: boolean) => {
+    if (done.current) return
+    done.current = true
+    if (save) props.onDone(value)
+    else props.onCancel()
+  }
+  return (
+    <input
+      ref={ref}
+      className="rename"
+      value={value}
+      spellCheck={false}
+      onChange={(e) => setValue(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') finish(true)
+        if (e.key === 'Escape') finish(false)
+      }}
+      onBlur={() => finish(true)}
+      onDoubleClick={(e) => e.stopPropagation()}
+    />
   )
 }

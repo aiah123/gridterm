@@ -58,3 +58,77 @@ html, body, #root {
   min-height: 0;
   padding: 4px 0 0 6px;
 }
+
+.title { cursor: default; }
+
+.rename {
+  width: 100%;
+  font: inherit;
+  color: var(--title-active-fg);
+  background: #1a1a1a;
+  border: 1px solid var(--active);
+  border-radius: 3px;
+  padding: 0 4px;
+  outline: none;
+}
+
+/* ---- Focus mode ---- */
+:root {
+  --focus-inset: 24px;
+  --panel-width: 300px;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+  animation: fade-in 140ms ease-out;
+}
+
+/* The focused tile stays in the DOM (its terminal keeps its state); it is
+   lifted out of the grid and laid over the backdrop. */
+.tile.focused {
+  position: fixed;
+  z-index: 20;
+  top: var(--focus-inset);
+  left: var(--focus-inset);
+  bottom: var(--focus-inset);
+  right: calc(var(--focus-inset) * 1.5 + var(--panel-width));
+  box-shadow: 0 0 0 1px var(--active), 0 20px 60px rgba(0, 0, 0, 0.6);
+  animation: zoom-in 160ms ease-out;
+}
+
+.context-panel {
+  position: fixed;
+  z-index: 20;
+  top: var(--focus-inset);
+  bottom: var(--focus-inset);
+  right: var(--focus-inset);
+  width: var(--panel-width);
+  padding: 14px 16px;
+  overflow: auto;
+  color: #d4d4d4;
+  background: #252526;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  animation: zoom-in 160ms ease-out;
+}
+
+.context-panel h2 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
+.context-panel h3 {
+  margin: 16px 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--title-fg);
+}
+.context-panel .muted { margin: 0; font-size: 12px; color: #777; }
+
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes zoom-in { from { opacity: 0; transform: scale(0.96); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop, .tile.focused, .context-panel { animation: none; }
+}

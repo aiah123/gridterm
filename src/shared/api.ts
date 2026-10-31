@@ -17,4 +17,10 @@ export interface GridtermApi {
   closeWindow(): void
 }
 
-export type AppCommand = 'new-session' | 'close-session'
+export type AppCommand =
+  | 'new-session'
+  | 'close-session'
+  | 'rename-session'
+  | 'toggle-focus'
+  | `nav-${'left' | 'right' | 'up' | 'down'}`
+  | `select-${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`

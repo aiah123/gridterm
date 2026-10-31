@@ -11,7 +11,8 @@
     "test": "vitest run",
     "postinstall": "electron-builder install-app-deps",
     "dist:mac": "electron-vite build && electron-builder --mac",
-    "dist:linux": "electron-vite build && electron-builder --linux"
+    "dist:linux": "electron-vite build && electron-builder --linux",
+    "test:e2e": "node e2e/smoke.cjs"
   },
   "keywords": [],
   "author": "",
@@ -24,6 +25,7 @@
     "electron": "^45.2.1",
     "electron-builder": "^26.18.0",
     "electron-vite": "^6.0.0",
+    "playwright": "^1.63.0",
     "typescript": "^5.9.3",
     "vite": "^8.3.5",
     "vitest": "^5.0.5"

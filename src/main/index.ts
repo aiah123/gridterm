@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, Menu, MenuItemConstructorOptions } from 'electron'
 import path from 'node:path'
 import { SessionManager } from './sessionManager'
+import { defaultBindings, matchBinding } from './keymap'
 import type { AppCommand } from '../shared/api'
 
 const isMac = process.platform === 'darwin'
@@ -15,10 +16,18 @@ function send(command: AppCommand): void {
   win?.webContents.send('app:command', command)
 }
 
+const bindings = defaultBindings(process.platform)
+const acceleratorFor = (command: AppCommand) => bindings.find((b) => b.command === command)?.accelerator
+
 /**
- * App shortcuts live in the menu so they are handled before keys reach the
- * terminal. On Linux we use Ctrl+Shift so plain Ctrl+<key> still reaches the shell.
+ * App shortcuts are matched in `before-input-event` (see createWindow) so they
+ * are handled before keys reach the terminal, even with the menu bar hidden.
+ * Menu items only display them (registerAccelerator: false) to avoid double firing.
  */
+function item(label: string, command: AppCommand): MenuItemConstructorOptions {
+  return { label, accelerator: acceleratorFor(command), registerAccelerator: false, click: () => send(command) }
+}
+
 function buildMenu(): void {
   const mod = isMac ? 'Cmd' : 'Ctrl+Shift'
   const template: MenuItemConstructorOptions[] = [
@@ -26,8 +35,22 @@ function buildMenu(): void {
     {
       label: 'Session',
       submenu: [
-        { label: 'New Session', accelerator: `${mod}+T`, click: () => send('new-session') },
-        { label: 'Close Session', accelerator: `${mod}+W`, click: () => send('close-session') }
+        item('New Session', 'new-session'),
+        item('Close Session', 'close-session'),
+        item('Rename Session', 'rename-session'),
+        { type: 'separator' },
+        item('Toggle Focus Mode', 'toggle-focus')
+      ]
+    },
+    {
+      label: 'Navigate',
+      submenu: [
+        item('Move Left', 'nav-left'),
+        item('Move Right', 'nav-right'),
+        item('Move Up', 'nav-up'),
+        item('Move Down', 'nav-down'),
+        { type: 'separator' },
+        ...([1, 2, 3, 4, 5, 6, 7, 8, 9] as const).map((n) => item(`Session ${n}`, `select-${n}`))
       ]
     },
     {
@@ -57,6 +80,13 @@ function createWindow(): void {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false
+    }
+  })
+  win.webContents.on('before-input-event', (event, input) => {
+    const command = matchBinding(bindings, input)
+    if (command) {
+      event.preventDefault()
+      send(command)
     }
   })
   win.on('closed', () => {
