@@ -1,3 +1,6 @@
+import type { AppCommand } from './commands'
+import type { ResolvedConfig } from './config'
+
 /** API exposed by the preload script on `window.gridterm`. */
 export interface SessionInfo {
   id: number
@@ -48,12 +51,20 @@ export interface GridtermApi {
   removeFile(id: number, path: string): void
   readFile(path: string): Promise<FileReadResult>
   revealFile(path: string): void
+
+  getConfig(): Promise<ResolvedConfig>
+  onConfig(cb: (rc: ResolvedConfig) => void): () => void
+  /** Set one setting, e.g. (['font', 'size'], 14). `undefined` resets it to the default. */
+  updateConfig(path: string[], value: unknown): Promise<void>
+  openConfigFile(): void
+  /** Pick an .itermcolors or .json file; returns the new theme's name. */
+  importTheme(): Promise<string | null>
+  /** Pause app shortcuts (while recording a new one in settings). */
+  suspendShortcuts(suspend: boolean): void
+  copyText(text: string): void
+  readClipboard(): Promise<string>
+  /** Native paste into the focused text field. */
+  pasteNative(): void
 }
 
-export type AppCommand =
-  | 'new-session'
-  | 'close-session'
-  | 'rename-session'
-  | 'toggle-focus'
-  | `nav-${'left' | 'right' | 'up' | 'down'}`
-  | `select-${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`
+export type { AppCommand } from './commands'

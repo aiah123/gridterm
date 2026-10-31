@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { AppCommand, GridtermApi, SessionContext } from '../shared/api'
+import type { ResolvedConfig } from '../shared/config'
 
 // Output can arrive before the tile has mounted and subscribed (e.g. the first
 // prompt), so buffer it per session and replay on subscribe.
@@ -52,7 +53,20 @@ const api: GridtermApi = {
   },
   removeFile: (id, p) => ipcRenderer.send('ctx:remove-file', id, p),
   readFile: (p) => ipcRenderer.invoke('file:read', p),
-  revealFile: (p) => ipcRenderer.send('file:reveal', p)
+  revealFile: (p) => ipcRenderer.send('file:reveal', p),
+  getConfig: () => ipcRenderer.invoke('config:get'),
+  onConfig(cb) {
+    const h = (_e: unknown, rc: ResolvedConfig) => cb(rc)
+    ipcRenderer.on('config:changed', h)
+    return () => ipcRenderer.removeListener('config:changed', h)
+  },
+  updateConfig: (keyPath, value) => ipcRenderer.invoke('config:update', keyPath, value),
+  openConfigFile: () => ipcRenderer.send('config:open-file'),
+  importTheme: () => ipcRenderer.invoke('config:import-theme'),
+  suspendShortcuts: (suspend) => ipcRenderer.send('keys:suspend', suspend),
+  copyText: (text) => ipcRenderer.send('clipboard:write', text),
+  readClipboard: () => ipcRenderer.invoke('clipboard:read'),
+  pasteNative: () => ipcRenderer.send('edit:paste-native')
 }
 
 contextBridge.exposeInMainWorld('gridterm', api)

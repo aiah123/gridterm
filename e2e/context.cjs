@@ -20,7 +20,7 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + `[${shellN
   const app = await _electron.launch({
     args: [path.join(dir, 'out/main/index.js'), '--no-sandbox'], cwd: dir,
     executablePath: require(path.join(dir, 'node_modules/electron')),
-    env: { ...process.env, SHELL: shellPath }
+    env: { ...process.env, SHELL: shellPath, GRIDTERM_CONFIG_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'gt-cfg-')) }
   });
   const w = await app.firstWindow();
   const key = async (accel) => {

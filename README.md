@@ -9,7 +9,8 @@ A terminal for macOS and Linux that shows all your sessions at once, laid out as
 - ✅ M3: focus mode (double-click to enlarge, click outside to exit)
 - ✅ M4: zsh/bash shell integration (current directory, commands, exit codes)
 - ✅ M5: Context panel (files opened per session, recent commands, file preview)
-- ⏳ M6: config file, themes, settings screen
+- ✅ M6: config file with live reload, themes, settings screen, remappable shortcuts
+- ⏳ M7: save and restore sessions, polish
 
 See [PLAN.md](PLAN.md) for the full plan.
 
@@ -18,7 +19,7 @@ See [PLAN.md](PLAN.md) for the full plan.
 npm install
 npm run dev        # run with hot reload
 npm test           # unit tests
-npm run build && npm run test:e2e && npm run test:e2e:context   # end-to-end tests (use xvfb-run -a on headless Linux)
+npm run build && npm run test:e2e:all   # end-to-end tests (use xvfb-run -a on headless Linux)
 npm run typecheck
 npm run dist:mac   # or dist:linux
 ```
@@ -33,6 +34,10 @@ npm run dist:mac   # or dist:linux
 | Move between sessions | Cmd+Option+Arrows | Ctrl+Alt+Arrows |
 | Jump to session 1–9 | Cmd+1…9 | Alt+1…9 |
 | Copy / Paste | Cmd+C / Cmd+V | Ctrl+Shift+C / Ctrl+Shift+V |
+| Text size (active session) | Cmd+= / Cmd+- / Cmd+0 | Ctrl+Shift+= / Ctrl+Shift+- / Ctrl+Shift+0 |
+| Settings | Cmd+, | Ctrl+Shift+, |
+
+You can change any of these in the settings screen or in `config.toml`.
 
 Mouse:
 - Click a tile to make it active. Only the active tile receives your typing.
@@ -40,6 +45,16 @@ Mouse:
 - Double-click a terminal to enter focus mode. Clicking anywhere outside the focused session exits focus mode; it doesn't change the active session.
 
 History, tab completion and the rest come from your own shell.
+
+## Settings
+Settings live in `~/.config/gridterm/config.toml`. Changes apply as soon as you save the file. You can also use the settings screen (Cmd+, / Ctrl+Shift+,) to:
+- pick from 9 built-in themes, or import iTerm2 themes
+- set the font, cursor, opacity and spacing
+- set scrollback, copy on select and the bell
+- choose the shell
+- record new shortcuts
+
+See [docs/config.md](docs/config.md) for every setting.
 
 ## Context panel
 In focus mode, the panel next to the session shows:

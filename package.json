@@ -13,7 +13,9 @@
     "dist:mac": "electron-vite build && electron-builder --mac",
     "dist:linux": "electron-vite build && electron-builder --linux",
     "test:e2e": "node e2e/smoke.cjs",
-    "test:e2e:context": "node e2e/context.cjs bash && node e2e/context.cjs zsh"
+    "test:e2e:context": "node e2e/context.cjs bash && node e2e/context.cjs zsh",
+    "test:e2e:config": "node e2e/config.cjs",
+    "test:e2e:all": "npm run test:e2e && npm run test:e2e:context && npm run test:e2e:config"
   },
   "keywords": [],
   "author": "",
@@ -37,7 +39,8 @@
     "@xterm/xterm": "^6.0.0",
     "node-pty": "^1.1.0",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "smol-toml": "^1.9.1"
   },
   "build": {
     "appId": "com.gridterm.app",

@@ -36,7 +36,7 @@ export function FilePreview({ path, onClose }: { path: string; onClose(): void }
         <span className="preview-path" title={path}>
           {path}
         </span>
-        <button onClick={onClose} aria-label="Close preview" title="Close (Esc)">
+        <button className="icon-btn" onClick={onClose} aria-label="Close preview" title="Close (Esc)">
           ×
         </button>
       </div>

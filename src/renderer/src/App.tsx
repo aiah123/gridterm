@@ -1,29 +1,74 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AppCommand, SessionContext } from '../../shared/api'
+import type { ResolvedConfig } from '../../shared/config'
 import { computeLayout, Direction, neighbor } from './layout'
-import { SessionTile } from './SessionTile'
+import { SessionTile, TileSettings } from './SessionTile'
 import { ContextPanel } from './ContextPanel'
 import { FilePreview } from './FilePreview'
+import { Settings } from './Settings'
+import { Toast, Toasts } from './Toasts'
+import { terminals } from './terminals'
 
 export interface Session {
   id: number
   name: string
 }
 
+const MIN_FONT = 6
+const MAX_FONT = 72
+
+/** Is keyboard focus in a normal text field (not a terminal)? */
+function editingText(): boolean {
+  const el = document.activeElement
+  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && !el.classList.contains('xterm-helper-textarea')
+}
+
 export function App() {
+  const [rc, setRc] = useState<ResolvedConfig | null>(null)
   const [sessions, setSessions] = useState<Session[]>([])
   const [activeId, setActiveId] = useState<number | null>(null)
   const [focusedId, setFocusedId] = useState<number | null>(null)
   const [renamingId, setRenamingId] = useState<number | null>(null)
   const [contexts, setContexts] = useState<Record<number, SessionContext>>({})
   const [preview, setPreview] = useState<string | null>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [toasts, setToasts] = useState<Toast[]>([])
+  /** Per-session font size change from zoom shortcuts. */
+  const [zoom, setZoom] = useState<Record<number, number>>({})
   // Bumped to hand keyboard focus back to the active terminal.
   const [refocus, setRefocus] = useState(0)
   const counter = useRef(0)
 
   // Latest state for IPC callbacks registered once.
-  const state = useRef({ sessions, activeId, focusedId })
-  state.current = { sessions, activeId, focusedId }
+  const state = useRef({ sessions, activeId, focusedId, settingsOpen, rc })
+  state.current = { sessions, activeId, focusedId, settingsOpen, rc }
+
+  const showToast = useCallback((toast: Toast) => {
+    setToasts((t) => [...t.filter((x) => x.id !== toast.id), toast])
+  }, [])
+  const dismissToast = useCallback((id: string) => setToasts((t) => t.filter((x) => x.id !== id)), [])
+
+  // Config: load once, then follow changes (file edits or the settings screen).
+  useEffect(() => {
+    const apply = (next: ResolvedConfig) => {
+      setRc(next)
+      if (next.warnings.length) showToast({ id: 'config', title: 'Problems in config.toml', items: next.warnings })
+      else dismissToast('config')
+    }
+    window.gridterm.getConfig().then(apply)
+    return window.gridterm.onConfig(apply)
+  }, [showToast, dismissToast])
+
+  // Theme and spacing as CSS variables.
+  useEffect(() => {
+    if (!rc) return
+    const root = document.documentElement.style
+    root.setProperty('--term-bg', rc.themeColors.background)
+    root.setProperty('--term-fg', rc.themeColors.foreground)
+    root.setProperty('--accent', rc.themeColors.accent)
+    root.setProperty('--gap', `${rc.config.window.gap}px`)
+    root.setProperty('--pad', `${rc.config.window.padding}px`)
+  }, [rc])
 
   const newSession = useCallback(async () => {
     const info = await window.gridterm.createSession()
@@ -39,23 +84,47 @@ export function App() {
     setRenamingId(null)
   }, [])
 
-  // Create the first session on startup (guarded against StrictMode double-run).
+  // Create the first session once the config is loaded.
   const started = useRef(false)
   useEffect(() => {
-    if (started.current) return
+    if (!rc || started.current) return
     started.current = true
     void newSession()
-  }, [newSession])
+  }, [rc, newSession])
 
   useEffect(() => {
-    const handleCommand = (cmd: AppCommand) => {
-      const { sessions: list, activeId: active, focusedId: focused } = state.current
-      const idx = list.findIndex((s) => s.id === active)
+    const handleCommand = async (cmd: AppCommand) => {
+      const { sessions: list, activeId: active, focusedId: focused, settingsOpen: inSettings, rc: cfg } = state.current
+      // Copy/paste also serve text fields (settings, rename).
+      if (cmd === 'copy') {
+        if (editingText()) return void document.execCommand('copy')
+        const term = active != null ? terminals.get(active) : undefined
+        if (term?.hasSelection()) window.gridterm.copyText(term.getSelection())
+        return
+      }
+      if (cmd === 'paste') {
+        if (editingText()) return window.gridterm.pasteNative()
+        const term = active != null ? terminals.get(active) : undefined
+        const text = await window.gridterm.readClipboard()
+        if (term && text) term.paste(text)
+        return
+      }
+      if (cmd === 'open-settings') return setSettingsOpen((o) => !o)
+      if (inSettings) return // other shortcuts are paused while settings are open
       if (cmd === 'new-session') return void newSession()
+      const idx = list.findIndex((s) => s.id === active)
       if (active == null || idx === -1) return
       if (cmd === 'close-session') return window.gridterm.kill(active)
       if (cmd === 'rename-session') return setRenamingId(active)
       if (cmd === 'toggle-focus') return setFocusedId(focused == null ? active : null)
+      if (cmd === 'zoom-in' || cmd === 'zoom-out' || cmd === 'zoom-reset') {
+        const base = cfg?.config.font.size ?? 13
+        return setZoom((z) => {
+          if (cmd === 'zoom-reset') return { ...z, [active]: 0 }
+          const next = Math.min(MAX_FONT, Math.max(MIN_FONT, base + (z[active] ?? 0) + (cmd === 'zoom-in' ? 1 : -1)))
+          return { ...z, [active]: next - base }
+        })
+      }
       let target = idx
       if (cmd.startsWith('nav-')) {
         target = neighbor(computeLayout(list.length), idx, cmd.slice(4) as Direction)
@@ -80,7 +149,7 @@ export function App() {
       if (next.length === 0) window.gridterm.closeWindow()
       else if (active === id) setActiveId(next[Math.min(idx, next.length - 1)].id)
     })
-    const offCmd = window.gridterm.onCommand(handleCommand)
+    const offCmd = window.gridterm.onCommand((cmd) => void handleCommand(cmd))
     const offCtx = window.gridterm.onContext((id, ctx) => setContexts((c) => ({ ...c, [id]: ctx })))
     return () => {
       offExit()
@@ -91,6 +160,29 @@ export function App() {
 
   // Closing focus mode or switching sessions closes the preview.
   useEffect(() => setPreview(null), [focusedId])
+  // Give the keyboard back to the terminal when settings close.
+  useEffect(() => {
+    if (!settingsOpen) setRefocus((n) => n + 1)
+  }, [settingsOpen])
+
+  const baseSettings = useMemo(() => {
+    if (!rc) return null
+    const { config, themeColors } = rc
+    return {
+      fontFamily: config.font.family,
+      fontSize: config.font.size,
+      lineHeight: config.font.lineHeight,
+      cursorStyle: config.cursor.style,
+      cursorBlink: config.cursor.blink,
+      scrollback: config.terminal.scrollback,
+      theme: themeColors,
+      optionIsMeta: config.terminal.optionIsMeta,
+      copyOnSelect: config.terminal.copyOnSelect,
+      bell: config.terminal.bell
+    } satisfies TileSettings
+  }, [rc])
+
+  if (!rc || !baseSettings) return null
 
   const layout = computeLayout(sessions.length)
   const focused = sessions.find((s) => s.id === focusedId) ?? null
@@ -106,6 +198,7 @@ export function App() {
       >
         {sessions.map((s, i) => {
           const p = layout.placements[i]
+          const delta = zoom[s.id] ?? 0
           return (
             <SessionTile
               key={s.id}
@@ -113,6 +206,7 @@ export function App() {
               name={s.name}
               cwd={contexts[s.id]?.cwdDisplay ?? null}
               refocus={refocus}
+              settings={delta ? { ...baseSettings, fontSize: Math.min(MAX_FONT, Math.max(MIN_FONT, baseSettings.fontSize + delta)) } : baseSettings}
               active={s.id === activeId}
               focused={s.id === focusedId}
               renaming={s.id === renamingId}
@@ -164,6 +258,14 @@ export function App() {
           )}
         </>
       )}
+      {settingsOpen && (
+        <Settings
+          rc={rc}
+          onClose={() => setSettingsOpen(false)}
+          onError={(message) => showToast({ id: 'settings', title: message, items: [] })}
+        />
+      )}
+      <Toasts toasts={toasts} onDismiss={dismissToast} />
     </>
   )
 }

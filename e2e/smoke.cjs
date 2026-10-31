@@ -6,7 +6,8 @@ const path = require('path');
 const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + name); if (!cond) process.exitCode = 1; };
 (async () => {
   const dir = path.resolve(__dirname, '..');
-  const app = await _electron.launch({ args: [dir + '/out/main/index.js', '--no-sandbox'], cwd: dir, executablePath: require(path.join(dir, 'node_modules/electron')) });
+  const app = await _electron.launch({ args: [dir + '/out/main/index.js', '--no-sandbox'], cwd: dir, executablePath: require(path.join(dir, 'node_modules/electron')),
+    env: { ...process.env, GRIDTERM_CONFIG_DIR: require('fs').mkdtempSync(path.join(require('os').tmpdir(), 'gt-cfg-')) } });
   const w = await app.firstWindow();
   const cmd = (c) => app.evaluate(({ BrowserWindow }, c) => BrowserWindow.getAllWindows()[0].webContents.send('app:command', c), c);
   const key = async (accel) => {
@@ -55,7 +56,7 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + name); if 
   await w.dblclick('.tile[data-session-id="4"] .term');
   await w.waitForSelector('.tile.focused');
   ok('double-click focuses tile 4', await w.$eval('.tile.focused', e => e.dataset.sessionId) === '4');
-  ok('context panel shows name', /bash/.test(await w.textContent('.context-panel h2')));
+  ok('context panel shows name', (await w.textContent('.context-panel h2')) === (await w.textContent('.tile.focused .title-text')).split(' — ')[0]);
   const fbox = await w.$eval('.tile.focused', e => { const r = e.getBoundingClientRect(); return [r.width, r.height]; });
   console.log('INFO focused size', fbox, 'window', await w.evaluate(() => [innerWidth, innerHeight]));
   await w.waitForTimeout(300);

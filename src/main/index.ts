@@ -1,10 +1,13 @@
-import { app, BrowserWindow, ipcMain, Menu, MenuItemConstructorOptions, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, MenuItemConstructorOptions, shell } from 'electron'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { SessionManager } from './sessionManager'
-import { defaultBindings, matchBinding } from './keymap'
+import { Binding, buildBindings, matchBinding } from './keymap'
 import { ContextTracker } from './contextTracker'
+import { ConfigService } from './configService'
 import type { AppCommand, FileReadResult } from '../shared/api'
+import { COMMAND_LABELS, SELECT_NUMS } from '../shared/commands'
+import type { ResolvedConfig } from '../shared/config'
 
 const isMac = process.platform === 'darwin'
 let win: BrowserWindow | null = null
@@ -12,6 +15,8 @@ let win: BrowserWindow | null = null
 const integrationDir = app.isPackaged
   ? path.join(process.resourcesPath, 'shell-integration')
   : path.join(__dirname, '../../resources/shell-integration')
+
+const config = new ConfigService(process.platform, (rc) => applyConfig(rc))
 
 const sessions = new SessionManager(
   {
@@ -21,7 +26,8 @@ const sessions = new SessionManager(
       win?.webContents.send('pty:exit', id, code)
     }
   },
-  integrationDir
+  integrationDir,
+  () => config.get().config.shell
 )
 
 const tracker = new ContextTracker(
@@ -54,54 +60,71 @@ function send(command: AppCommand): void {
   win?.webContents.send('app:command', command)
 }
 
-const bindings = defaultBindings(process.platform)
-const acceleratorFor = (command: AppCommand) => bindings.find((b) => b.command === command)?.accelerator
+let bindings: Binding[] = []
+let shortcutsSuspended = false
+
+function applyConfig(rc: ResolvedConfig): void {
+  bindings = buildBindings(rc.keys, process.platform)
+  buildMenu(rc)
+  win?.setOpacity(rc.config.window.opacity)
+  win?.setBackgroundColor(rc.themeColors.background)
+  win?.webContents.send('config:changed', rc)
+}
 
 /**
  * App shortcuts are matched in `before-input-event` (see createWindow) so they
  * are handled before keys reach the terminal, even with the menu bar hidden.
  * Menu items only display them (registerAccelerator: false) to avoid double firing.
  */
-function item(label: string, command: AppCommand): MenuItemConstructorOptions {
-  return { label, accelerator: acceleratorFor(command), registerAccelerator: false, click: () => send(command) }
-}
-
-function buildMenu(): void {
-  const mod = isMac ? 'Cmd' : 'Ctrl+Shift'
+function buildMenu(rc: ResolvedConfig): void {
+  const item = (command: AppCommand, label = COMMAND_LABELS[command]): MenuItemConstructorOptions => ({
+    label,
+    accelerator: rc.keys[command],
+    registerAccelerator: false,
+    click: () => send(command)
+  })
   const template: MenuItemConstructorOptions[] = [
-    ...(isMac ? [{ role: 'appMenu' as const }] : []),
+    ...(isMac
+      ? [{ label: app.name, submenu: [{ role: 'about' as const }, { type: 'separator' as const }, item('open-settings', 'Settings…'), { type: 'separator' as const }, { role: 'hide' as const }, { role: 'hideOthers' as const }, { type: 'separator' as const }, { role: 'quit' as const }] }]
+      : []),
     {
       label: 'Session',
       submenu: [
-        item('New Session', 'new-session'),
-        item('Close Session', 'close-session'),
-        item('Rename Session', 'rename-session'),
+        item('new-session'),
+        item('close-session'),
+        item('rename-session'),
         { type: 'separator' },
-        item('Toggle Focus Mode', 'toggle-focus')
+        item('toggle-focus'),
+        ...(isMac ? [] : [{ type: 'separator' as const }, item('open-settings', 'Settings…'), { role: 'quit' as const }])
+      ]
+    },
+    {
+      label: 'Edit',
+      // Copy/paste go through our commands so they work with the terminal's
+      // own selection. No role accelerators on Linux: Ctrl+A/X/Z belong to the shell.
+      submenu: [item('copy'), item('paste'), ...(isMac ? [{ role: 'cut' as const }, { role: 'selectAll' as const }, { role: 'undo' as const }, { role: 'redo' as const }] : [])]
+    },
+    {
+      label: 'View',
+      submenu: [
+        item('zoom-in'),
+        item('zoom-out'),
+        item('zoom-reset'),
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+        { role: 'toggleDevTools' }
       ]
     },
     {
       label: 'Navigate',
       submenu: [
-        item('Move Left', 'nav-left'),
-        item('Move Right', 'nav-right'),
-        item('Move Up', 'nav-up'),
-        item('Move Down', 'nav-down'),
+        item('nav-left'),
+        item('nav-right'),
+        item('nav-up'),
+        item('nav-down'),
         { type: 'separator' },
-        ...([1, 2, 3, 4, 5, 6, 7, 8, 9] as const).map((n) => item(`Session ${n}`, `select-${n}`))
+        ...SELECT_NUMS.map((n) => item(`select-${n}`))
       ]
-    },
-    {
-      label: 'Edit',
-      submenu: [
-        { role: 'copy', accelerator: `${mod}+C` },
-        { role: 'paste', accelerator: `${mod}+V` },
-        { role: 'selectAll' }
-      ]
-    },
-    {
-      label: 'View',
-      submenu: [{ role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'togglefullscreen' }]
     }
   ]
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
@@ -111,7 +134,7 @@ function createWindow(): void {
   win = new BrowserWindow({
     width: 1400,
     height: 900,
-    backgroundColor: '#1e1e1e',
+    backgroundColor: config.get().themeColors.background,
     autoHideMenuBar: true,
     title: 'Gridterm',
     webPreferences: {
@@ -121,12 +144,14 @@ function createWindow(): void {
     }
   })
   win.webContents.on('before-input-event', (event, input) => {
+    if (shortcutsSuspended) return
     const command = matchBinding(bindings, input)
     if (command) {
       event.preventDefault()
       send(command)
     }
   })
+  win.setOpacity(config.get().config.window.opacity)
   win.on('closed', () => {
     sessions.killAll()
     win = null
@@ -150,10 +175,36 @@ ipcMain.handle('file:read', (_e, p: string) => readPreview(p))
 ipcMain.on('file:reveal', (_e, p: string) => {
   if (tracker.isKnownFile(p)) shell.showItemInFolder(p)
 })
+ipcMain.handle('config:get', () => config.get())
+ipcMain.handle('config:update', (_e, keyPath: string[], value: unknown) => config.update(keyPath, value))
+ipcMain.on('config:open-file', () => void shell.openPath(config.file))
+ipcMain.handle('config:import-theme', async () => {
+  if (!win) return null
+  const res = await dialog.showOpenDialog(win, {
+    title: 'Import theme',
+    filters: [{ name: 'Themes', extensions: ['itermcolors', 'json'] }],
+    properties: ['openFile']
+  })
+  if (res.canceled || !res.filePaths[0]) return null
+  return config.importTheme(res.filePaths[0])
+})
+ipcMain.on('keys:suspend', (_e, suspend: boolean) => {
+  shortcutsSuspended = suspend
+})
+ipcMain.on('clipboard:write', async (_e, text: string) => {
+  await clipboard.writeText(text)
+  // Linux also has the "primary" selection used by middle-click paste.
+  if (process.platform === 'linux') await clipboard.selection?.writeText(text).catch(() => {})
+})
+ipcMain.handle('clipboard:read', () => clipboard.readText())
+ipcMain.on('edit:paste-native', () => win?.webContents.paste())
 
 app.whenReady().then(() => {
-  buildMenu()
+  const rc = config.init()
+  bindings = buildBindings(rc.keys, process.platform)
+  buildMenu(rc)
   createWindow()
+  config.watch()
   tracker.start()
   app.on('activate', () => {
     if (!win) createWindow()

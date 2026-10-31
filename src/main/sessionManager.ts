@@ -44,7 +44,8 @@ export class SessionManager {
   /** @param integrationDir directory holding resources/shell-integration */
   constructor(
     private events: SessionEvents,
-    private integrationDir: string
+    private integrationDir: string,
+    private shellSettings: () => { program: string; integration: boolean }
   ) {}
 
   list(): { id: number; pid: number }[] {
@@ -54,7 +55,7 @@ export class SessionManager {
   /** Arguments and environment that load Gridterm's hooks into zsh/bash. */
   private shellLaunch(shell: string, env: Record<string, string>): string[] {
     const name = path.basename(shell)
-    if (env.GRIDTERM_NO_SHELL_INTEGRATION) return ['-l']
+    if (env.GRIDTERM_NO_SHELL_INTEGRATION || !this.shellSettings().integration) return ['-l']
     if (name === 'zsh') {
       if (env.ZDOTDIR) env.GRIDTERM_USER_ZDOTDIR = env.ZDOTDIR
       else delete env.GRIDTERM_USER_ZDOTDIR
@@ -68,12 +69,14 @@ export class SessionManager {
     return ['-l']
   }
 
-  static defaultShell(): string {
+  private shellPath(): string {
+    const configured = this.shellSettings().program.trim()
+    if (configured) return configured
     return process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash')
   }
 
   create(opts: { cols?: number; rows?: number; cwd?: string } = {}): { id: number; shell: string } {
-    const shell = SessionManager.defaultShell()
+    const shell = this.shellPath()
     const id = this.nextId++
     const env = { ...process.env } as Record<string, string>
     env.TERM = 'xterm-256color'
