@@ -84,6 +84,8 @@ function expandHome(p: string, home: string): string {
 export function filesFromCommand(line: string, cwd: string, home: string): { program: string; paths: string[] }[] {
   const results: { program: string; paths: string[] }[] = []
   const tokens = tokenize(line)
+  // `cd dir && vim file` opens dir/file: follow cd/pushd within the line.
+  let dir = cwd
   let segment: string[] = []
   let skipNext = false // word after a redirect operator
 
@@ -104,6 +106,12 @@ export function filesFromCommand(line: string, cwd: string, home: string): { pro
     }
     if (!words.length) return
     const program = path.basename(words[0])
+    if (program === 'cd' || program === 'pushd') {
+      const target = words.slice(1).find((w) => !w.startsWith('-'))
+      if (target) dir = path.resolve(dir, expandHome(target, home))
+      else if (words.length === 1) dir = home
+      return
+    }
     if (!FILE_COMMANDS.has(program)) return
     const paths: string[] = []
     let afterDashDash = false
@@ -114,7 +122,7 @@ export function filesFromCommand(line: string, cwd: string, home: string): { pro
       }
       if (!afterDashDash && (arg.startsWith('-') || arg.startsWith('+'))) continue
       if (!arg || /^[a-z]+:\/\//i.test(arg)) continue // URLs
-      paths.push(path.resolve(cwd, expandHome(arg, home)))
+      paths.push(path.resolve(dir, expandHome(arg, home)))
     }
     if (paths.length) results.push({ program, paths })
   }

@@ -34,6 +34,13 @@ describe('filesFromCommand', () => {
     expect(files('/usr/bin/vim a')).toEqual(['/work/a'])
   })
 
+  it('follows cd within the command line', () => {
+    expect(files('cd src && vim app.ts')).toEqual(['/work/src/app.ts'])
+    expect(files('cd ~/notes; less a.md')).toEqual(['/home/me/notes/a.md'])
+    expect(files('cd && cat .zshrc')).toEqual(['/home/me/.zshrc'])
+    expect(files('cat a; cd /etc; cat hosts')).toEqual(['/work/a', '/etc/hosts'])
+  })
+
   it('handles pipelines, lists and redirects', () => {
     expect(files('cat a.log | grep x > out.txt && less b.log')).toEqual(['/work/a.log', '/work/b.log'])
     expect(files('cat < in.txt')).toEqual([])

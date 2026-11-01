@@ -36,6 +36,10 @@ gap = 6
 program = "/opt/homebrew/bin/zsh"
 integration = true
 
+[app]
+restoreSessions = true
+confirmQuit = true
+
 [keys]
 nav-up = "Ctrl+Shift+Up"      # e.g. to avoid GNOME's Ctrl+Alt+Up
 nav-down = "Ctrl+Shift+Down"
@@ -61,6 +65,8 @@ select-9 = false              # turn a shortcut off
 | `window.gap` | `4` | 0–40 px between sessions |
 | `shell.program` | `""` | Path to a shell. `""` uses `$SHELL`. Applies to new sessions. |
 | `shell.integration` | `true` | Directory, command and file tracking for zsh and bash. Applies to new sessions. |
+| `app.restoreSessions` | `true` | Reopen the last sessions (names, folders, context) and the window size on launch. Saved in `state.json` next to `config.toml`. |
+| `app.confirmQuit` | `true` | Ask before quitting while a command is running |
 
 ## Themes
 
@@ -111,6 +117,7 @@ Every shortcut needs a modifier (F-keys don't), so it can't block normal typing.
 | `rename-session` | Cmd+R | Ctrl+Shift+R |
 | `toggle-focus` | Cmd+Enter | Ctrl+Shift+Enter |
 | `open-settings` | Cmd+, | Ctrl+Shift+, |
+| `find` | Cmd+F | Ctrl+Shift+F |
 | `copy` / `paste` | Cmd+C / Cmd+V | Ctrl+Shift+C / Ctrl+Shift+V |
 | `zoom-in` / `zoom-out` / `zoom-reset` | Cmd+= / Cmd+- / Cmd+0 | Ctrl+Shift+= / Ctrl+Shift+- / Ctrl+Shift+0 |
 | `nav-left` / `nav-right` / `nav-up` / `nav-down` | Cmd+Option+Arrows | Ctrl+Alt+Arrows |

@@ -37,6 +37,7 @@ export function App() {
   const [zoom, setZoom] = useState<Record<number, number>>({})
   // Bumped to hand keyboard focus back to the active terminal.
   const [refocus, setRefocus] = useState(0)
+  const [findingId, setFindingId] = useState<number | null>(null)
   const counter = useRef(0)
 
   // Latest state for IPC callbacks registered once.
@@ -68,6 +69,10 @@ export function App() {
     root.setProperty('--accent', rc.themeColors.accent)
     root.setProperty('--gap', `${rc.config.window.gap}px`)
     root.setProperty('--pad', `${rc.config.window.padding}px`)
+    // ANSI colours, used for syntax highlighting in file previews.
+    for (const c of ['red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'brightBlack'] as const) {
+      root.setProperty(`--ansi-${c}`, rc.themeColors[c])
+    }
   }, [rc])
 
   const newSession = useCallback(async () => {
@@ -78,19 +83,41 @@ export function App() {
     setFocusedId(null)
   }, [])
 
+  /** Reopen the sessions saved at the last quit, in order, with their names. */
+  const restoreSessions = useCallback(async (): Promise<boolean> => {
+    const saved = await window.gridterm.getRestore()
+    if (!saved) return false
+    const created: Session[] = []
+    for (let i = 0; i < saved.sessions.length; i++) {
+      const info = await window.gridterm.createSession({ restoreIndex: i })
+      created.push({ id: info.id, name: saved.sessions[i].name })
+    }
+    counter.current = created.length
+    setSessions(created)
+    setActiveId(created[saved.activeIndex]?.id ?? created[0].id)
+    return true
+  }, [])
+
   const rename = useCallback((id: number, name: string) => {
     const trimmed = name.trim()
     if (trimmed) setSessions((s) => s.map((x) => (x.id === id ? { ...x, name: trimmed } : x)))
     setRenamingId(null)
   }, [])
 
-  // Create the first session once the config is loaded.
+  // Once the config is loaded, restore the last sessions or start a new one.
   const started = useRef(false)
   useEffect(() => {
     if (!rc || started.current) return
     started.current = true
-    void newSession()
-  }, [rc, newSession])
+    void restoreSessions().then((restored) => {
+      if (!restored) void newSession()
+    })
+  }, [rc, newSession, restoreSessions])
+
+  // Report names/order/active so the main process can save them for next time.
+  useEffect(() => {
+    if (started.current) window.gridterm.reportLayout(sessions, activeId)
+  }, [sessions, activeId])
 
   useEffect(() => {
     const handleCommand = async (cmd: AppCommand) => {
@@ -117,6 +144,7 @@ export function App() {
       if (cmd === 'close-session') return window.gridterm.kill(active)
       if (cmd === 'rename-session') return setRenamingId(active)
       if (cmd === 'toggle-focus') return setFocusedId(focused == null ? active : null)
+      if (cmd === 'find') return setFindingId(active)
       if (cmd === 'zoom-in' || cmd === 'zoom-out' || cmd === 'zoom-reset') {
         const base = cfg?.config.font.size ?? 13
         return setZoom((z) => {
@@ -146,7 +174,12 @@ export function App() {
       setSessions(next)
       if (focused === id) setFocusedId(null)
       setRenamingId((r) => (r === id ? null : r))
-      if (next.length === 0) window.gridterm.closeWindow()
+      setFindingId((f) => (f === id ? null : f))
+      if (next.length === 0) {
+        // Last shell exited: nothing to restore next time.
+        window.gridterm.reportLayout([], null)
+        window.gridterm.closeWindow()
+      }
       else if (active === id) setActiveId(next[Math.min(idx, next.length - 1)].id)
     })
     const offCmd = window.gridterm.onCommand((cmd) => void handleCommand(cmd))
@@ -210,6 +243,11 @@ export function App() {
               active={s.id === activeId}
               focused={s.id === focusedId}
               renaming={s.id === renamingId}
+              finding={s.id === findingId}
+              onCloseFind={() => {
+                setFindingId(null)
+                setRefocus((n) => n + 1)
+              }}
               onActivate={() => setActiveId(s.id)}
               onEnterFocus={() => {
                 setActiveId(s.id)

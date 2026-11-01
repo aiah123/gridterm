@@ -25,12 +25,14 @@
 | M2 ✅ | Session names and renaming, keyboard navigation |
 | M3 ✅ | Focus mode with click outside to exit |
 | M4 ✅ | zsh/bash shell integration (injected through a `ZDOTDIR` wrapper / `--rcfile`) |
-| M5 ✅ | Context panel and file preview (plain text; syntax highlighting later) |
+| M5 ✅ | Context panel and file preview |
 | M6 ✅ | Config file, themes, settings screen, remappable shortcuts |
-| M7 | Save and restore sessions, polish |
+| M7 ✅ | Save and restore sessions; quit confirmation, find, links, syntax highlighting, WebGL cap |
 | M8 | Signed and notarized `.dmg`, AppImage/deb |
 
 ## Known issues found while building
+- In bash, pressing Enter on an empty line recorded Gridterm's own prompt hook as a command. That's fixed.
+- `cd dir && vim file` now records `dir/file`. The command parser follows `cd` within a line.
 - Copy/paste originally went through the browser's own copy command, which can't see the terminal's selection. It now uses the terminal's selection. The Linux Edit menu also no longer claims Ctrl+A/X/Z, which belong to the shell.
 - On Linux, node-pty leaks Electron's open file handles into the shell. Gridterm now starts the shell through a small bash launcher that closes them first; the process ID stays the same. macOS is not affected.
 

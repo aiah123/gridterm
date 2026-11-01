@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { highlightLines } from './highlight'
 import type { FileReadResult } from '../../shared/api'
 
 /** Read-only file preview laid over the focused session. */
@@ -16,8 +17,12 @@ export function FilePreview({ path, onClose }: { path: string; onClose(): void }
     }
   }, [path])
 
-  const lines = result?.ok ? result.text.split('\n') : []
-  if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop()
+  const lines = useMemo(() => {
+    if (!result?.ok) return [] as { html?: string; text: string }[]
+    const text = result.text.endsWith('\n') ? result.text.slice(0, -1) : result.text
+    const html = highlightLines(path, text)
+    return text.split('\n').map((t, i) => ({ text: t, html: html?.[i] }))
+  }, [result, path])
 
   return (
     <div
@@ -48,7 +53,8 @@ export function FilePreview({ path, onClose }: { path: string; onClose(): void }
             {lines.map((l, i) => (
               <div key={i} className="line">
                 <span className="ln">{i + 1}</span>
-                <span>{l || ' '}</span>
+                {/* highlight.js output is HTML-escaped text wrapped in spans. */}
+                {l.html !== undefined ? <span dangerouslySetInnerHTML={{ __html: l.html || ' ' }} /> : <span>{l.text || ' '}</span>}
               </div>
             ))}
             {result.truncated && <div className="muted">… preview truncated</div>}

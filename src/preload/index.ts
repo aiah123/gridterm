@@ -54,6 +54,9 @@ const api: GridtermApi = {
   removeFile: (id, p) => ipcRenderer.send('ctx:remove-file', id, p),
   readFile: (p) => ipcRenderer.invoke('file:read', p),
   revealFile: (p) => ipcRenderer.send('file:reveal', p),
+  getRestore: () => ipcRenderer.invoke('state:get-restore'),
+  reportLayout: (list, activeId) => ipcRenderer.send('state:layout', list, activeId),
+  openLink: (url) => ipcRenderer.send('link:open', url),
   getConfig: () => ipcRenderer.invoke('config:get'),
   onConfig(cb) {
     const h = (_e: unknown, rc: ResolvedConfig) => cb(rc)

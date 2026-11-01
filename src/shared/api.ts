@@ -16,6 +16,12 @@ export interface FileEntry {
   via: string
 }
 
+/** A session saved at quit, offered once at startup. */
+export interface RestoreInfo {
+  sessions: { name: string }[]
+  activeIndex: number
+}
+
 export interface CommandEntry {
   command: string
   cwd: string
@@ -36,7 +42,8 @@ export type FileReadResult =
 
 export interface GridtermApi {
   platform: NodeJS.Platform
-  createSession(opts?: { cols?: number; rows?: number; cwd?: string }): Promise<SessionInfo>
+  /** `restoreIndex` picks a session saved at the last quit (its cwd and context). */
+  createSession(opts?: { cols?: number; rows?: number; restoreIndex?: number }): Promise<SessionInfo>
   write(id: number, data: string): void
   resize(id: number, cols: number, rows: number): void
   kill(id: number): void
@@ -51,6 +58,12 @@ export interface GridtermApi {
   removeFile(id: number, path: string): void
   readFile(path: string): Promise<FileReadResult>
   revealFile(path: string): void
+
+  /** Saved sessions to reopen (only returned once, at startup). */
+  getRestore(): Promise<RestoreInfo | null>
+  /** Report session names/order/active so they can be saved. */
+  reportLayout(sessions: { id: number; name: string }[], activeId: number | null): void
+  openLink(url: string): void
 
   getConfig(): Promise<ResolvedConfig>
   onConfig(cb: (rc: ResolvedConfig) => void): () => void

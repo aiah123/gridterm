@@ -7,6 +7,7 @@ export type AppCommand =
   | 'rename-session'
   | 'toggle-focus'
   | 'open-settings'
+  | 'find'
   | 'copy'
   | 'paste'
   | 'zoom-in'
@@ -21,6 +22,7 @@ export const COMMAND_LABELS: Record<AppCommand, string> = {
   'rename-session': 'Rename session',
   'toggle-focus': 'Toggle focus mode',
   'open-settings': 'Settings',
+  find: 'Find in session',
   copy: 'Copy',
   paste: 'Paste',
   'zoom-in': 'Bigger text',
@@ -62,6 +64,7 @@ export function defaultKeys(platform: string): Record<AppCommand, string> {
     'rename-session': `${mod}+R`,
     'toggle-focus': `${mod}+Enter`,
     'open-settings': `${mod}+,`,
+    find: `${mod}+F`,
     copy: `${mod}+C`,
     paste: `${mod}+V`,
     'zoom-in': `${mod}+=`,

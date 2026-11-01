@@ -189,6 +189,26 @@ export function Settings({ rc, onClose, onError }: Props) {
             </>
           )}
 
+          {tab === 'terminal' && (
+            <>
+              <h3>Startup and quit</h3>
+              <CheckRow
+                label="Reopen sessions"
+                id="restore-sessions"
+                checked={config.app.restoreSessions}
+                onChange={(v) => set(['app', 'restoreSessions'], v)}
+                hint="Bring back session names, folders and context on the next launch. Running programs are not restored."
+              />
+              <CheckRow
+                label="Confirm quit"
+                id="confirm-quit"
+                checked={config.app.confirmQuit}
+                onChange={(v) => set(['app', 'confirmQuit'], v)}
+                hint="Ask before quitting while a command is still running."
+              />
+            </>
+          )}
+
           {tab === 'shortcuts' && (
             <ShortcutTable rc={rc} recording={recording} setRecording={setRecording} set={set} />
           )}

@@ -50,6 +50,27 @@ export class ContextTracker {
     return ctx
   }
 
+  /** Pre-fill a session's context (restored from the last run). */
+  seed(id: number, ctx: { cwd: string | null; files: FileEntry[]; commands: CommandEntry[] }): void {
+    this.contexts.set(id, {
+      cwd: ctx.cwd,
+      cwdDisplay: ctx.cwd ? tildify(ctx.cwd, this.home) : null,
+      files: [...ctx.files],
+      commands: [...ctx.commands]
+    })
+    this.emit(id)
+  }
+
+  /** Names of commands running in each session (empty when at the prompt). */
+  async busySessions(): Promise<{ id: number; command: string }[]> {
+    const out: { id: number; command: string }[] = []
+    for (const { id, pid } of this.listSessions()) {
+      const fg = await foregroundPid(pid)
+      if (fg && fg !== pid) out.push({ id, command: (await processName(fg)) ?? 'a command' })
+    }
+    return out
+  }
+
   remove(id: number): void {
     this.contexts.delete(id)
   }
@@ -189,5 +210,16 @@ export async function openFiles(pid: number): Promise<string[]> {
       .map((l) => l.slice(1))
   } catch {
     return []
+  }
+}
+
+/** Short process name, e.g. "vim". */
+export async function processName(pid: number): Promise<string | null> {
+  try {
+    if (process.platform === 'linux') return (await fs.readFile(`/proc/${pid}/comm`, 'utf8')).trim() || null
+    const { stdout } = await run('ps', ['-o', 'comm=', '-p', String(pid)])
+    return path.basename(stdout.trim()) || null
+  } catch {
+    return null
   }
 }

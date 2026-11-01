@@ -37,6 +37,7 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + `[${shellN
   await run('cat notes.txt');
   await run(`less "it's here.md"`, 900); await w.keyboard.type('q'); await w.waitForTimeout(400);
   await run('false');
+  await run(''); // Enter on an empty line must not be recorded as a command
   // Not a known command, but holds held.txt open as stdin: found by polling.
   await w.keyboard.type('sleep 6 < held.txt\n');
   await w.waitForTimeout(3500);
@@ -64,6 +65,7 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + `[${shellN
   const cmds = await w.$$eval('.ctx-cmd', els => els.map(e => [e.querySelector('.badge').textContent, e.querySelector('code').textContent]));
   console.log('INFO commands', JSON.stringify(cmds));
   ok('sleep shown running', cmds[0] && cmds[0][1] === 'sleep 6 < held.txt' && cmds[0][0] === '…');
+  ok('empty Enter records nothing', cmds.length === 5 && !cmds.some(([, c]) => c.startsWith('__gt')));
   ok('false shows exit 1', cmds.some(([b, c]) => c === 'false' && b === '1'));
   ok('cat shows success', cmds.some(([b, c]) => c === 'cat notes.txt' && b === '✓'));
   ok('panel shows cwd', (await w.textContent('.ctx-cwd')).includes(path.basename(work)));

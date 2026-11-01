@@ -63,6 +63,8 @@ else
   __gt_debug() {
     [ "$__gt_ready" = 1 ] || return 0
     [ -n "${COMP_LINE:-}" ] && return 0   # tab completion
+    # Enter on an empty line runs no command: the next trap is our own prompt hook.
+    case $BASH_COMMAND in __gt_prompt_start*) return 0;; esac
     __gt_ready=0
     __gt_preexec "$BASH_COMMAND"
   }

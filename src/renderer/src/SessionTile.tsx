@@ -2,10 +2,20 @@ import { CSSProperties, useEffect, useRef, useState } from 'react'
 import { ITheme, Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
+import { SearchAddon } from '@xterm/addon-search'
+import { WebLinksAddon } from '@xterm/addon-web-links'
 import type { BellMode, CursorStyle } from '../../shared/config'
 import { unescapePayload } from './osc'
 import { terminals } from './terminals'
 import { beep } from './bell'
+import { FindBar } from './FindBar'
+
+/**
+ * Browsers allow only ~16 live WebGL contexts. Past this many terminals, new
+ * ones use the DOM renderer instead of risking lost contexts.
+ */
+const MAX_WEBGL = 12
+let webglInUse = 0
 
 /** Terminal settings that can change while the terminal is running. */
 export interface TileSettings {
@@ -30,6 +40,8 @@ interface Props {
   active: boolean
   focused: boolean
   renaming: boolean
+  finding: boolean
+  onCloseFind(): void
   onActivate(): void
   onEnterFocus(): void
   onStartRename(): void
@@ -43,6 +55,7 @@ export function SessionTile(props: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<(() => void) | null>(null)
+  const searchRef = useRef<SearchAddon | null>(null)
   const settingsRef = useRef(settings)
   settingsRef.current = settings
   const activeRef = useRef(active)
@@ -67,13 +80,30 @@ export function SessionTile(props: Props) {
     })
     const fit = new FitAddon()
     term.loadAddon(fit)
+    const search = new SearchAddon()
+    term.loadAddon(search)
+    searchRef.current = search
+    // Links open with Cmd+click (macOS) or Ctrl+click, so plain clicks still select text.
+    term.loadAddon(
+      new WebLinksAddon((event, uri) => {
+        if (window.gridterm.platform === 'darwin' ? event.metaKey : event.ctrlKey) window.gridterm.openLink(uri)
+      })
+    )
     term.open(host)
-    try {
-      const webgl = new WebglAddon()
-      webgl.onContextLoss(() => webgl.dispose())
-      term.loadAddon(webgl)
-    } catch {
-      // Fall back to the default DOM renderer.
+    let webgl: WebglAddon | null = null
+    if (webglInUse < MAX_WEBGL) {
+      try {
+        webgl = new WebglAddon()
+        webgl.onContextLoss(() => {
+          webgl?.dispose()
+          webgl = null
+          webglInUse--
+        })
+        term.loadAddon(webgl)
+        webglInUse++
+      } catch {
+        webgl = null // Fall back to the default DOM renderer.
+      }
     }
     termRef.current = term
     terminals.set(id, term)
@@ -127,6 +157,7 @@ export function SessionTile(props: Props) {
       osc.dispose()
       offData()
       terminals.delete(id)
+      if (webgl) webglInUse--
       term.dispose()
       termRef.current = null
       fitRef.current = null
@@ -178,6 +209,7 @@ export function SessionTile(props: Props) {
           </>
         )}
       </div>
+      {props.finding && searchRef.current && <FindBar search={searchRef.current} accent={settings.theme.selectionBackground ?? '#264f78'} onClose={props.onCloseFind} />}
       <div
         className="term"
         ref={hostRef}

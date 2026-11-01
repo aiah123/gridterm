@@ -1,11 +1,12 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, MenuItemConstructorOptions, shell } from 'electron'
-import { promises as fs } from 'node:fs'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, MenuItemConstructorOptions, screen, shell } from 'electron'
+import { promises as fs, statSync } from 'node:fs'
 import path from 'node:path'
 import { SessionManager } from './sessionManager'
 import { Binding, buildBindings, matchBinding } from './keymap'
 import { ContextTracker } from './contextTracker'
 import { ConfigService } from './configService'
-import type { AppCommand, FileReadResult } from '../shared/api'
+import { SavedState, StateStore, WindowBounds } from './stateStore'
+import type { AppCommand, FileReadResult, RestoreInfo } from '../shared/api'
 import { COMMAND_LABELS, SELECT_NUMS } from '../shared/commands'
 import type { ResolvedConfig } from '../shared/config'
 
@@ -31,9 +32,84 @@ const sessions = new SessionManager(
 )
 
 const tracker = new ContextTracker(
-  (id, ctx) => win?.webContents.send('ctx:update', id, ctx),
+  (id, ctx) => {
+    win?.webContents.send('ctx:update', id, ctx)
+    scheduleSave()
+  },
   () => sessions.list()
 )
+
+// ---- Saving and restoring sessions ----
+
+const store = new StateStore(config.dir)
+/** Sessions saved at the last quit; handed to the renderer once. */
+let restore: SavedState | null = null
+let restoreOffered = false
+/** Session names and order as last reported by the renderer. */
+let layout: { sessions: { id: number; name: string }[]; activeId: number | null } = { sessions: [], activeId: null }
+let saveTimer: NodeJS.Timeout | null = null
+/** Set once the window is closing: shells exiting then must not overwrite the saved state. */
+let closing = false
+let lastBounds: WindowBounds | undefined
+
+function currentState(): SavedState {
+  const sessionsOut = layout.sessions.map(({ id, name }) => {
+    const ctx = tracker.get(id)
+    return { name, cwd: ctx.cwd, files: ctx.files, commands: ctx.commands }
+  })
+  const activeIndex = Math.max(0, layout.sessions.findIndex((s) => s.id === layout.activeId))
+  return { version: 1, sessions: sessionsOut, activeIndex, window: lastBounds }
+}
+
+function rememberBounds(): void {
+  if (!win || win.isDestroyed() || win.isMinimized() || win.isFullScreen()) return
+  const b = win.isMaximized() ? win.getNormalBounds() : win.getBounds()
+  lastBounds = { ...b, maximized: win.isMaximized() }
+}
+
+function saveNow(): void {
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = null
+  rememberBounds()
+  store.save(currentState())
+}
+
+function scheduleSave(): void {
+  if (closing) return
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(saveNow, 1000)
+}
+
+/** Saved bounds, if they are still on a connected display. */
+function savedBounds(): WindowBounds | undefined {
+  const b = restore?.window ?? store.load()?.window
+  if (!b) return undefined
+  const area = screen.getDisplayMatching(b).workArea
+  const visible = b.x < area.x + area.width - 100 && b.x + b.width > area.x + 100 && b.y >= area.y - 10 && b.y < area.y + area.height - 100
+  return visible ? b : { ...b, x: area.x + 40, y: area.y + 40, width: Math.min(b.width, area.width - 80), height: Math.min(b.height, area.height - 80) }
+}
+
+// ---- Quit confirmation ----
+
+let closeConfirmed = false
+let quitRequested = false
+
+async function confirmClose(): Promise<boolean> {
+  if (!config.get().config.app.confirmQuit || !win) return true
+  const busy = await tracker.busySessions()
+  if (!busy.length) return true
+  const names = new Map(layout.sessions.map((s) => [s.id, s.name]))
+  const lines = busy.map((b) => `• ${names.get(b.id) ?? 'Session'}: ${b.command}`).join('\n')
+  const { response } = await dialog.showMessageBox(win, {
+    type: 'warning',
+    buttons: ['Cancel', 'Quit'],
+    defaultId: 0,
+    cancelId: 0,
+    message: busy.length === 1 ? 'A command is still running.' : `${busy.length} commands are still running.`,
+    detail: `${lines}\n\nQuitting will stop ${busy.length === 1 ? 'it' : 'them'}. Your sessions' names, folders and context are saved either way.`
+  })
+  return response === 1
+}
 
 const MAX_PREVIEW_BYTES = 512 * 1024
 
@@ -131,9 +207,11 @@ function buildMenu(rc: ResolvedConfig): void {
 }
 
 function createWindow(): void {
+  const bounds = savedBounds()
   win = new BrowserWindow({
-    width: 1400,
-    height: 900,
+    width: bounds?.width ?? 1400,
+    height: bounds?.height ?? 900,
+    ...(bounds ? { x: bounds.x, y: bounds.y } : {}),
     backgroundColor: config.get().themeColors.background,
     autoHideMenuBar: true,
     title: 'Gridterm',
@@ -152,6 +230,26 @@ function createWindow(): void {
     }
   })
   win.setOpacity(config.get().config.window.opacity)
+  if (bounds?.maximized) win.maximize()
+  for (const ev of ['resize', 'move', 'maximize', 'unmaximize'] as const) win.on(ev as 'resize', () => { rememberBounds(); scheduleSave() })
+  win.on('close', (event) => {
+    if (!closeConfirmed) {
+      event.preventDefault()
+      void confirmClose().then((ok) => {
+        if (!ok) {
+          quitRequested = false
+          return
+        }
+        closeConfirmed = true
+        if (quitRequested) app.quit()
+        else win?.close()
+      })
+      return
+    }
+    // Save before the shells are killed; their exits must not empty the saved list.
+    saveNow()
+    closing = true
+  })
   win.on('closed', () => {
     sessions.killAll()
     win = null
@@ -164,7 +262,33 @@ function createWindow(): void {
   }
 }
 
-ipcMain.handle('pty:create', (_e, opts) => sessions.create(opts))
+ipcMain.handle('pty:create', (_e, opts: { cols?: number; rows?: number; restoreIndex?: number } = {}) => {
+  const saved = opts.restoreIndex !== undefined ? restore?.sessions[opts.restoreIndex] : undefined
+  let cwd: string | undefined
+  if (saved?.cwd) {
+    try {
+      if (statSync(saved.cwd).isDirectory()) cwd = saved.cwd
+    } catch {
+      // Folder is gone; start in the home directory.
+    }
+  }
+  const info = sessions.create({ cols: opts.cols, rows: opts.rows, cwd })
+  if (saved) tracker.seed(info.id, { cwd: cwd ?? null, files: saved.files, commands: saved.commands })
+  return info
+})
+ipcMain.handle('state:get-restore', (): RestoreInfo | null => {
+  if (restoreOffered || !restore?.sessions.length) return null
+  restoreOffered = true
+  return { sessions: restore.sessions.map((s) => ({ name: s.name })), activeIndex: restore.activeIndex }
+})
+ipcMain.on('state:layout', (_e, list: { id: number; name: string }[], activeId: number | null) => {
+  layout = { sessions: list, activeId }
+  scheduleSave()
+})
+ipcMain.on('link:open', (_e, url: string) => {
+  // Only web links; never file:// or custom schemes from terminal output.
+  if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
+})
 ipcMain.on('pty:write', (_e, id: number, data: string) => sessions.write(id, data))
 ipcMain.on('pty:resize', (_e, id: number, cols: number, rows: number) => sessions.resize(id, cols, rows))
 ipcMain.on('pty:kill', (_e, id: number) => sessions.kill(id))
@@ -199,8 +323,13 @@ ipcMain.on('clipboard:write', async (_e, text: string) => {
 ipcMain.handle('clipboard:read', () => clipboard.readText())
 ipcMain.on('edit:paste-native', () => win?.webContents.paste())
 
+app.on('before-quit', () => {
+  quitRequested = true
+})
+
 app.whenReady().then(() => {
   const rc = config.init()
+  restore = rc.config.app.restoreSessions ? store.load() : null
   bindings = buildBindings(rc.keys, process.platform)
   buildMenu(rc)
   createWindow()
