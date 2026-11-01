@@ -11,18 +11,38 @@ A terminal for macOS and Linux that shows all your sessions at once, laid out as
 - ✅ M5: Context panel (files opened per session, recent commands, file preview)
 - ✅ M6: config file with live reload, themes, settings screen, remappable shortcuts
 - ✅ M7: session restore, quit confirmation, find, clickable links, syntax-highlighted previews
-- ⏳ M8: signed and notarized macOS build, Linux packages
 
 See [PLAN.md](PLAN.md) for the full plan.
 
+## Running from source
+Gridterm isn't packaged as an app; run it from the code. It works on macOS and Linux.
+
+**You need:**
+- [Node.js](https://nodejs.org) 20 or newer, with npm
+- **Linux:** a C/C++ toolchain, because the terminal module (`node-pty`) is compiled on install:
+  - Debian/Ubuntu: `sudo apt install build-essential python3`
+  - Fedora: `sudo dnf install gcc-c++ make python3`
+- **macOS:** nothing extra. `node-pty` ships prebuilt for Intel and Apple Silicon. If its install ever falls back to compiling, install the Xcode Command Line Tools with `xcode-select --install`.
+- zsh or bash for directory, command and file tracking. Other shells work without it.
+
+**Then:**
+```bash
+git clone https://github.com/aiah123/gridterm.git
+cd gridterm
+npm install
+npm start
+```
+
+`npm start` builds the app and opens it. To update, run `git pull`, then `npm install` and `npm start` again.
+
+If `npm install` fails while building `node-pty`, check that the toolchain above is installed, then run `npm install` again.
+
 ## Development
 ```bash
-npm install
 npm run dev        # run with hot reload
 npm test           # unit tests
-npm run build && npm run test:e2e:all   # end-to-end tests (use xvfb-run -a on headless Linux)
 npm run typecheck
-npm run dist:mac   # or dist:linux
+npm run build && npm run test:e2e:all   # end-to-end tests (use xvfb-run -a on headless Linux)
 ```
 
 ## Shortcuts

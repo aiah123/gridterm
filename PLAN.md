@@ -28,7 +28,7 @@
 | M5 ✅ | Context panel and file preview |
 | M6 ✅ | Config file, themes, settings screen, remappable shortcuts |
 | M7 ✅ | Save and restore sessions; quit confirmation, find, links, syntax highlighting, WebGL cap |
-| M8 | Signed and notarized `.dmg`, AppImage/deb |
+| M8 — skipped | Packaging (`.dmg`, AppImage/deb). Not planned for now: people run Gridterm from source (see README). |
 
 ## Known issues found while building
 - In bash, pressing Enter on an empty line recorded Gridterm's own prompt hook as a command. That's fixed.

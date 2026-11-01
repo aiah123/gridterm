@@ -9,9 +9,6 @@
     "start": "electron-vite preview",
     "typecheck": "tsc",
     "test": "vitest run",
-    "postinstall": "electron-builder install-app-deps",
-    "dist:mac": "electron-vite build && electron-builder --mac",
-    "dist:linux": "electron-vite build && electron-builder --linux",
     "test:e2e": "node e2e/smoke.cjs",
     "test:e2e:context": "node e2e/context.cjs bash && node e2e/context.cjs zsh",
     "test:e2e:config": "node e2e/config.cjs",
@@ -27,7 +24,6 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "electron": "^45.2.1",
-    "electron-builder": "^26.18.0",
     "electron-vite": "^6.0.0",
     "playwright": "^1.63.0",
     "typescript": "^5.9.3",
@@ -46,34 +42,7 @@
     "react-dom": "^19.3.1",
     "smol-toml": "^1.9.1"
   },
-  "build": {
-    "appId": "com.gridterm.app",
-    "productName": "Gridterm",
-    "files": [
-      "out/**/*"
-    ],
-    "asarUnpack": [
-      "**/node_modules/node-pty/**"
-    ],
-    "mac": {
-      "target": "dmg",
-      "category": "public.app-category.developer-tools"
-    },
-    "linux": {
-      "target": [
-        "AppImage",
-        "deb"
-      ],
-      "category": "Development"
-    },
-    "extraResources": [
-      {
-        "from": "resources/shell-integration",
-        "to": "shell-integration",
-        "filter": [
-          "**/*"
-        ]
-      }
-    ]
+  "engines": {
+    "node": ">=20"
   }
 }
