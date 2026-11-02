@@ -45,7 +45,7 @@ const api: GridtermApi = {
     return () => ipcRenderer.removeListener('app:command', h)
   },
   closeWindow: () => ipcRenderer.send('app:close-window'),
-  contextEvent: (id, kind, payload) => ipcRenderer.send('ctx:event', id, kind, payload),
+  contextEvent: (id, kind, nonce, payload) => ipcRenderer.send('ctx:event', id, kind, nonce, payload),
   onContext(cb) {
     const h = (_e: unknown, id: number, ctx: SessionContext) => cb(id, ctx)
     ipcRenderer.on('ctx:update', h)

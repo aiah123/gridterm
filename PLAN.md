@@ -30,6 +30,11 @@
 | M7 ✅ | Save and restore sessions; quit confirmation, find, links, syntax highlighting, WebGL cap |
 | M8 — skipped | Packaging (`.dmg`, AppImage/deb). Not planned for now: people run Gridterm from source (see README). |
 
+## Security fixes (from the security review)
+- **Foreign pages could use Gridterm's API.** Navigation away from the app page is now blocked: links, location changes, dropped files, redirects and iframes. New windows are denied. Every internal message is accepted only from Gridterm's own page.
+- **Terminal output could forge shell-integration messages.** Each session gets a random secret that only its shell scripts know; they unset it before your startup files run. Messages without it are ignored, so `cat`, `curl` or `ssh` output can't fake commands, folders or files. Inserting a command or path from the Context panel now always inserts one line without control characters, as a paste, so it can't run anything by itself.
+- Still open from the review: validate setting names in config updates (low).
+
 ## Known issues found while building
 - In bash, pressing Enter on an empty line recorded Gridterm's own prompt hook as a command. That's fixed.
 - `cd dir && vim file` now records `dir/file`. The command parser follows `cd` within a line.

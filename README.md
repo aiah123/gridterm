@@ -42,7 +42,7 @@ If `npm install` fails while building `node-pty`, check that the toolchain above
 npm run dev        # run with hot reload
 npm test           # unit tests
 npm run typecheck
-npm run build && npm run test:e2e:all   # end-to-end tests (use xvfb-run -a on headless Linux)
+npm run build && npm run test:e2e:all   # end-to-end tests, incl. security (use xvfb-run -a on headless Linux)
 ```
 
 ## Shortcuts

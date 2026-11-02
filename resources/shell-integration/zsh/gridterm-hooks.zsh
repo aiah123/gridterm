@@ -1,5 +1,5 @@
 # Gridterm zsh hooks.
-[[ -n $_gt_installed ]] && return
+[[ -n $_gt_installed || -z ${_gt_nonce-} ]] && return
 typeset -g _gt_installed=1 _gt_ran=0
 
 _gt_osc() {
@@ -8,7 +8,7 @@ _gt_osc() {
   s=${s//$'\n'/\\n}
   s=${s//$'\e'/\\e}
   s=${s//$'\a'/\\a}
-  builtin printf '\e]7770;%s;%s\a' "$1" "$s"
+  builtin printf '\e]7770;%s;%s;%s\a' "$1" "$_gt_nonce" "$s"
 }
 
 _gt_preexec() {

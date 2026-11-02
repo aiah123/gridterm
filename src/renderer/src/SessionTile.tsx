@@ -5,7 +5,7 @@ import { WebglAddon } from '@xterm/addon-webgl'
 import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import type { BellMode, CursorStyle } from '../../shared/config'
-import { unescapePayload } from './osc'
+import { parseIntegrationMessage } from './osc'
 import { terminals } from './terminals'
 import { beep } from './bell'
 import { FindBar } from './FindBar'
@@ -109,10 +109,11 @@ export function SessionTile(props: Props) {
     terminals.set(id, term)
 
     // Shell integration events: ESC ] 7770 ; kind ; payload BEL
+    // Always swallowed; forwarded only if well-formed. The main process drops
+    // any message whose nonce doesn't match (i.e. forged by program output).
     const osc = term.parser.registerOscHandler(7770, (data) => {
-      const sep = data.indexOf(';')
-      if (sep === -1) return true
-      window.gridterm.contextEvent(id, data.slice(0, sep), unescapePayload(data.slice(sep + 1)))
+      const msg = parseIntegrationMessage(data)
+      if (msg) window.gridterm.contextEvent(id, msg.kind, msg.nonce, msg.payload)
       return true
     })
 

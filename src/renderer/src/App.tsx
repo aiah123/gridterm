@@ -8,6 +8,7 @@ import { FilePreview } from './FilePreview'
 import { Settings } from './Settings'
 import { Toast, Toasts } from './Toasts'
 import { terminals } from './terminals'
+import { singleLine } from './osc'
 
 export interface Session {
   id: number
@@ -282,7 +283,10 @@ export function App() {
             onPreview={setPreview}
             onInsert={(text) => {
               setPreview(null)
-              window.gridterm.write(focused.id, text)
+              // One line, no control characters, sent as a paste: inserting can
+              // never run a command by itself; the user still presses Enter.
+              const line = singleLine(text)
+              if (line) terminals.get(focused.id)?.paste(line)
             }}
           />
           {preview && (

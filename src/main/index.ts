@@ -1,4 +1,5 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, MenuItemConstructorOptions, screen, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, IpcMainEvent, IpcMainInvokeEvent, Menu, MenuItemConstructorOptions, screen, shell } from 'electron'
+import { pathToFileURL } from 'node:url'
 import { promises as fs, statSync } from 'node:fs'
 import path from 'node:path'
 import { SessionManager } from './sessionManager'
@@ -6,12 +7,52 @@ import { Binding, buildBindings, matchBinding } from './keymap'
 import { ContextTracker } from './contextTracker'
 import { ConfigService } from './configService'
 import { SavedState, StateStore, WindowBounds } from './stateStore'
+import { isTrustedUrl } from './trust'
 import type { AppCommand, FileReadResult, RestoreInfo } from '../shared/api'
 import { COMMAND_LABELS, SELECT_NUMS } from '../shared/commands'
 import type { ResolvedConfig } from '../shared/config'
 
 const isMac = process.platform === 'darwin'
 let win: BrowserWindow | null = null
+
+// ---- Trust boundary ----
+// Only Gridterm's own page may use the internal API (it can start shells and
+// type into them), so: never navigate away from it, never open other windows,
+// and ignore IPC from anything else.
+
+const APP_URL = process.env.ELECTRON_RENDERER_URL ?? pathToFileURL(path.join(__dirname, '../renderer/index.html')).href
+
+app.on('web-contents-created', (_e, contents) => {
+  // Covers links, location changes and files dropped onto the window, in any frame.
+  contents.on('will-frame-navigate', (event) => {
+    if (!isTrustedUrl(event.url, APP_URL)) event.preventDefault()
+  })
+  contents.on('will-redirect', (event) => {
+    if (!isTrustedUrl(event.url, APP_URL)) event.preventDefault()
+  })
+  contents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  contents.on('will-attach-webview', (event) => event.preventDefault())
+})
+
+function fromApp(event: IpcMainEvent | IpcMainInvokeEvent): boolean {
+  const frame = event.senderFrame
+  return !!win && event.sender === win.webContents && !!frame && frame.parent === null && isTrustedUrl(frame.url, APP_URL)
+}
+
+/** ipcMain.on that ignores messages not sent by Gridterm's own page. */
+function on(channel: string, listener: (event: IpcMainEvent, ...args: any[]) => void): void {
+  ipcMain.on(channel, (event, ...args) => {
+    if (fromApp(event)) listener(event, ...args)
+  })
+}
+
+/** ipcMain.handle that rejects calls not made by Gridterm's own page. */
+function handle(channel: string, listener: (event: IpcMainInvokeEvent, ...args: any[]) => unknown): void {
+  ipcMain.handle(channel, (event, ...args) => {
+    if (!fromApp(event)) throw new Error('Rejected: request did not come from Gridterm.')
+    return listener(event, ...args)
+  })
+}
 
 const integrationDir = app.isPackaged
   ? path.join(process.resourcesPath, 'shell-integration')
@@ -262,7 +303,7 @@ function createWindow(): void {
   }
 }
 
-ipcMain.handle('pty:create', (_e, opts: { cols?: number; rows?: number; restoreIndex?: number } = {}) => {
+handle('pty:create', (_e, opts: { cols?: number; rows?: number; restoreIndex?: number } = {}) => {
   const saved = opts.restoreIndex !== undefined ? restore?.sessions[opts.restoreIndex] : undefined
   let cwd: string | undefined
   if (saved?.cwd) {
@@ -276,33 +317,36 @@ ipcMain.handle('pty:create', (_e, opts: { cols?: number; rows?: number; restoreI
   if (saved) tracker.seed(info.id, { cwd: cwd ?? null, files: saved.files, commands: saved.commands })
   return info
 })
-ipcMain.handle('state:get-restore', (): RestoreInfo | null => {
+handle('state:get-restore', (): RestoreInfo | null => {
   if (restoreOffered || !restore?.sessions.length) return null
   restoreOffered = true
   return { sessions: restore.sessions.map((s) => ({ name: s.name })), activeIndex: restore.activeIndex }
 })
-ipcMain.on('state:layout', (_e, list: { id: number; name: string }[], activeId: number | null) => {
+on('state:layout', (_e, list: { id: number; name: string }[], activeId: number | null) => {
   layout = { sessions: list, activeId }
   scheduleSave()
 })
-ipcMain.on('link:open', (_e, url: string) => {
+on('link:open', (_e, url: string) => {
   // Only web links; never file:// or custom schemes from terminal output.
   if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
 })
-ipcMain.on('pty:write', (_e, id: number, data: string) => sessions.write(id, data))
-ipcMain.on('pty:resize', (_e, id: number, cols: number, rows: number) => sessions.resize(id, cols, rows))
-ipcMain.on('pty:kill', (_e, id: number) => sessions.kill(id))
-ipcMain.on('app:close-window', () => win?.close())
-ipcMain.on('ctx:event', (_e, id: number, kind: string, payload: string) => void tracker.handleEvent(id, kind, payload))
-ipcMain.on('ctx:remove-file', (_e, id: number, p: string) => tracker.removeFile(id, p))
-ipcMain.handle('file:read', (_e, p: string) => readPreview(p))
-ipcMain.on('file:reveal', (_e, p: string) => {
+on('pty:write', (_e, id: number, data: string) => sessions.write(id, data))
+on('pty:resize', (_e, id: number, cols: number, rows: number) => sessions.resize(id, cols, rows))
+on('pty:kill', (_e, id: number) => sessions.kill(id))
+on('app:close-window', () => win?.close())
+on('ctx:event', (_e, id: number, kind: string, nonce: string, payload: string) => {
+  // Drop anything not signed by the session's own shell integration.
+  if (sessions.verifyNonce(id, nonce)) void tracker.handleEvent(id, kind, payload)
+})
+on('ctx:remove-file', (_e, id: number, p: string) => tracker.removeFile(id, p))
+handle('file:read', (_e, p: string) => readPreview(p))
+on('file:reveal', (_e, p: string) => {
   if (tracker.isKnownFile(p)) shell.showItemInFolder(p)
 })
-ipcMain.handle('config:get', () => config.get())
-ipcMain.handle('config:update', (_e, keyPath: string[], value: unknown) => config.update(keyPath, value))
-ipcMain.on('config:open-file', () => void shell.openPath(config.file))
-ipcMain.handle('config:import-theme', async () => {
+handle('config:get', () => config.get())
+handle('config:update', (_e, keyPath: string[], value: unknown) => config.update(keyPath, value))
+on('config:open-file', () => void shell.openPath(config.file))
+handle('config:import-theme', async () => {
   if (!win) return null
   const res = await dialog.showOpenDialog(win, {
     title: 'Import theme',
@@ -312,16 +356,16 @@ ipcMain.handle('config:import-theme', async () => {
   if (res.canceled || !res.filePaths[0]) return null
   return config.importTheme(res.filePaths[0])
 })
-ipcMain.on('keys:suspend', (_e, suspend: boolean) => {
+on('keys:suspend', (_e, suspend: boolean) => {
   shortcutsSuspended = suspend
 })
-ipcMain.on('clipboard:write', async (_e, text: string) => {
+on('clipboard:write', async (_e, text: string) => {
   await clipboard.writeText(text)
   // Linux also has the "primary" selection used by middle-click paste.
   if (process.platform === 'linux') await clipboard.selection?.writeText(text).catch(() => {})
 })
-ipcMain.handle('clipboard:read', () => clipboard.readText())
-ipcMain.on('edit:paste-native', () => win?.webContents.paste())
+handle('clipboard:read', () => clipboard.readText())
+on('edit:paste-native', () => win?.webContents.paste())
 
 app.on('before-quit', () => {
   quitRequested = true

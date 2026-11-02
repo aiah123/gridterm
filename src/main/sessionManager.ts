@@ -1,4 +1,5 @@
 import * as pty from 'node-pty'
+import { randomBytes, timingSafeEqual } from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -11,6 +12,11 @@ export interface SessionEvents {
 interface Session {
   id: number
   proc: pty.IPty
+  /**
+   * Secret shared with this session's shell integration. Its messages carry
+   * it, so text printed by programs (cat, curl, ssh…) can't forge them.
+   */
+  nonce: string
   buffer: string
   timer: NodeJS.Timeout | null
 }
@@ -83,6 +89,9 @@ export class SessionManager {
     env.COLORTERM = 'truecolor'
     env.TERM_PROGRAM = 'gridterm'
     delete env.ELECTRON_RUN_AS_NODE
+    // The shell scripts read this once and unset it, so child processes don't inherit it.
+    const nonce = randomBytes(16).toString('hex')
+    env.GRIDTERM_NONCE = nonce
 
     const [file, args] = launcher(shell, this.shellLaunch(shell, env))
     const proc = pty.spawn(file, args, {
@@ -93,7 +102,7 @@ export class SessionManager {
       env
     })
 
-    const session: Session = { id, proc, buffer: '', timer: null }
+    const session: Session = { id, proc, nonce, buffer: '', timer: null }
     this.sessions.set(id, session)
 
     proc.onData((data) => {
@@ -119,6 +128,13 @@ export class SessionManager {
       session.buffer = ''
       this.events.onData(session.id, data)
     }
+  }
+
+  /** Was this shell-integration message really sent by the session's shell? */
+  verifyNonce(id: number, nonce: unknown): boolean {
+    const expected = this.sessions.get(id)?.nonce
+    if (!expected || typeof nonce !== 'string' || nonce.length !== expected.length) return false
+    return timingSafeEqual(Buffer.from(nonce), Buffer.from(expected))
   }
 
   write(id: number, data: string): void {

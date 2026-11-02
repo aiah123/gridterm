@@ -5,7 +5,14 @@ files are always loaded first; the hooks are added afterwards.
 
 They report events to the terminal with a private escape sequence:
 
-    ESC ] 7770 ; <kind> ; <payload> BEL
+    ESC ] 7770 ; <kind> ; <nonce> ; <payload> BEL
+
+`<nonce>` is a random secret Gridterm creates for each session and passes in
+`GRIDTERM_NONCE`. The scripts copy it into a private shell variable and unset
+the environment variable before your startup files run, so programs can't read
+it. Gridterm ignores messages with a missing or wrong nonce, so text printed by
+programs (`cat`, `curl`, a remote host over `ssh`, …) can't fake commands,
+folders or files.
 
 | kind | payload | when |
 |---|---|---|

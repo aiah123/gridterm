@@ -12,8 +12,9 @@
     "test:e2e": "node e2e/smoke.cjs",
     "test:e2e:context": "node e2e/context.cjs bash && node e2e/context.cjs zsh",
     "test:e2e:config": "node e2e/config.cjs",
-    "test:e2e:all": "npm run test:e2e && npm run test:e2e:context && npm run test:e2e:config && npm run test:e2e:restore",
-    "test:e2e:restore": "node e2e/restore.cjs"
+    "test:e2e:all": "npm run test:e2e && npm run test:e2e:context && npm run test:e2e:config && npm run test:e2e:restore && npm run test:e2e:security",
+    "test:e2e:restore": "node e2e/restore.cjs",
+    "test:e2e:security": "node e2e/security.cjs bash && node e2e/security.cjs zsh"
   },
   "keywords": [],
   "author": "",

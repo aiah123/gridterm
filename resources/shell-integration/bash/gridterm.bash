@@ -1,5 +1,11 @@
 # Gridterm bash integration. Loaded with: bash --rcfile <this file> -i
 
+# 0. Keep Gridterm's per-session secret in a private (unexported) variable, and
+#    remove it from the environment before anything else runs, so programs
+#    started from this shell can't read it and forge messages.
+__gt_nonce=${GRIDTERM_NONCE-}
+unset GRIDTERM_NONCE
+
 # 1. Load the user's startup files, the way bash normally would.
 if [ -n "$GRIDTERM_BASH_LOGIN" ]; then
   unset GRIDTERM_BASH_LOGIN
@@ -14,7 +20,7 @@ else
 fi
 
 # 2. Install hooks (once).
-if [ -z "$__gt_installed" ] && [[ $- == *i* ]]; then
+if [ -z "$__gt_installed" ] && [ -n "$__gt_nonce" ] && [[ $- == *i* ]]; then
 __gt_installed=1
 
 __gt_osc() {
@@ -23,7 +29,7 @@ __gt_osc() {
   s=${s//$'\n'/\\n}
   s=${s//$'\e'/\\e}
   s=${s//$'\a'/\\a}
-  builtin printf '\e]7770;%s;%s\a' "$1" "$s"
+  builtin printf '\e]7770;%s;%s;%s\a' "$1" "$__gt_nonce" "$s"
 }
 
 __gt_ready=0        # 1 while waiting at the prompt: the next DEBUG trap is a new command

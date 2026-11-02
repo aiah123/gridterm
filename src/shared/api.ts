@@ -52,8 +52,8 @@ export interface GridtermApi {
   onExit(cb: (id: number, exitCode: number) => void): () => void
   onCommand(cb: (command: AppCommand) => void): () => void
   closeWindow(): void
-  /** Forward a shell-integration event (OSC 7770) from a terminal. */
-  contextEvent(id: number, kind: string, payload: string): void
+  /** Forward a shell-integration event (OSC 7770) from a terminal; the main process checks the nonce. */
+  contextEvent(id: number, kind: string, nonce: string, payload: string): void
   onContext(cb: (id: number, ctx: SessionContext) => void): () => void
   removeFile(id: number, path: string): void
   readFile(path: string): Promise<FileReadResult>

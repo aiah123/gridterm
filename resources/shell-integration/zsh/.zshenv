@@ -1,3 +1,11 @@
+# Gridterm: keep the per-session secret in a private (unexported) variable and
+# remove it from the environment first, so programs started from this shell
+# can't read it and forge messages.
+if [[ -n ${GRIDTERM_NONCE-} ]]; then
+  typeset -g _gt_nonce=$GRIDTERM_NONCE
+  unset GRIDTERM_NONCE
+fi
+
 # Gridterm: load the user's ~/.zshenv (or $ZDOTDIR/.zshenv) first.
 _gt_zdotdir=$ZDOTDIR
 ZDOTDIR=${GRIDTERM_USER_ZDOTDIR:-$HOME}
