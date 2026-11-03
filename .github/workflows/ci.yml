@@ -30,6 +30,15 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y zsh xvfb
 
+      # The runner image has group/world-writable folders in zsh's function
+      # path, so Ubuntu's global compinit stops every new zsh with an
+      # "insecure directories" y/n prompt. Tighten them, as zsh recommends.
+      - name: Fix insecure zsh completion folders (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          dirs=$(zsh -c 'autoload -Uz compaudit; compaudit' 2>/dev/null || true)
+          if [ -n "$dirs" ]; then echo "$dirs"; echo "$dirs" | xargs sudo chmod g-w,o-w; fi
+
       - name: Install dependencies
         run: npm ci
 

@@ -5,7 +5,7 @@ const { _electron } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { prepareConfigDir, realTempDir, waitForShell, dumpTerminals } = require('./helpers.cjs');
+const { prepareConfigDir, realTempDir, waitForShell, dumpTerminals, screenText } = require('./helpers.cjs');
 let page = null;
 const shellName = process.argv[2] || 'bash';
 const S = process.argv[3];
@@ -84,13 +84,13 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + `[${shellN
   await w.waitForTimeout(200);
   ok('Esc closes preview, focus mode stays', (await w.$('.preview')) === null && (await w.$('.tile.focused')) !== null);
   await run('echo back-$((5*5))', 500);
-  ok('terminal has keys after preview', /back-25/.test(await w.innerText('.tile.focused .xterm-rows')));
+  ok('terminal has keys after preview', /back-25/.test(await screenText(w, '.tile.focused')));
 
   // Edit inserts an editor command without running it
   await w.hover(`.ctx-file[title="${path.join(work, "it's here.md")}"]`);
   await w.click(`.ctx-file[title="${path.join(work, "it's here.md")}"] .ctx-actions button:has-text("Edit")`);
   await w.waitForTimeout(400);
-  const rows = await w.innerText('.tile.focused .xterm-rows');
+  const rows = await screenText(w, '.tile.focused');
   ok('edit inserts quoted command', rows.includes(`\${EDITOR:-vi} '${work}/it'\\''s here.md'`));
   await w.keyboard.press('Control+C'); await w.waitForTimeout(300);
 

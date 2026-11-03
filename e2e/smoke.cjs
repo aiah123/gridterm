@@ -3,7 +3,7 @@
 const { _electron } = require('playwright');
 const S = process.argv[2]; // optional screenshot dir
 const path = require('path');
-const { prepareConfigDir } = require('./helpers.cjs');
+const { prepareConfigDir, screenText } = require('./helpers.cjs');
 const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + name); if (!cond) process.exitCode = 1; };
 (async () => {
   const dir = path.resolve(__dirname, '..');
@@ -50,7 +50,7 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + name); if 
   ok('escape cancels rename', (await w.textContent('.tile[data-session-id="2"] .title')).trim().startsWith('server'));
   // typing goes back to the terminal after rename
   await w.keyboard.type('echo typed-$((2+3))\n'); await w.waitForTimeout(500);
-  ok('terminal gets keys after rename', /typed-5/.test(await w.innerText('.tile[data-session-id="2"] .xterm-rows').catch(() => '')));
+  ok('terminal gets keys after rename', /typed-5/.test(await screenText(w, '.tile[data-session-id="2"]')));
 
   // Focus mode by double-clicking the terminal area
   await w.dblclick('.tile[data-session-id="4"] .term');
@@ -62,7 +62,7 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + name); if 
   await w.waitForTimeout(300);
   if (S) await w.screenshot({ path: S + '/focus.png' });
   await w.keyboard.type('echo focus-$((3*3))\n'); await w.waitForTimeout(500);
-  ok('focused terminal gets keys', /focus-9/.test(await w.innerText('.tile.focused .xterm-rows').catch(() => '')));
+  ok('focused terminal gets keys', /focus-9/.test(await screenText(w, '.tile.focused')));
 
   // Navigation in focus mode swaps the focused session
   await key('Control+Alt+ArrowRight');
@@ -75,7 +75,7 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + name); if 
   ok('click outside exits focus', (await w.$('.tile.focused')) === null && (await w.$('.backdrop')) === null);
   ok('active unchanged after exit (5)', await active() === '5');
   await w.keyboard.type('echo after-$((4*4))\n'); await w.waitForTimeout(500);
-  ok('keys still go to session 5', /after-16/.test(await w.innerText('.tile[data-session-id="5"] .xterm-rows').catch(() => '')));
+  ok('keys still go to session 5', /after-16/.test(await screenText(w, '.tile[data-session-id="5"]')));
 
   // Toggle via shortcut
   await key('Control+Shift+Enter'); ok('toggle enters', await w.$eval('.tile.focused', e => e.dataset.sessionId) === '5');

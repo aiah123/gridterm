@@ -5,7 +5,7 @@ const { _electron } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { withTestKeys, prepareConfigDir, realTempDir, LINK_MODIFIER, isMac, waitForShell, dumpTerminals } = require('./helpers.cjs');
+const { withTestKeys, prepareConfigDir, realTempDir, LINK_MODIFIER, isMac, waitForShell, dumpTerminals, screenText } = require('./helpers.cjs');
 let page = null;
 const S = process.argv[2];
 const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + name); if (!cond) process.exitCode = 1; };
@@ -59,14 +59,14 @@ async function closeWith(app, answer) {
   await key('Control+Shift+T'); await waitForShell(w);
   await run(`cd '${work}/gone'`);
   await key('Alt+2'); // make "api" active
-  await app.evaluate(({ BrowserWindow }) => { const b = BrowserWindow.getAllWindows()[0]; b.unmaximize(); b.setBounds({ x: 60, y: 50, width: 1000, height: 700 }); });
+  await app.evaluate(({ BrowserWindow }) => { const b = BrowserWindow.getAllWindows()[0]; b.unmaximize(); b.setBounds({ x: 40, y: 60, width: 820, height: 520 }); });
   await w.waitForTimeout(400);
   ok('quit with idle shells shows no dialog', (await closeWith(app, 1)) === null);
   const state = JSON.parse(fs.readFileSync(path.join(cfgDir, 'state.json'), 'utf8'));
   ok('state saved: names in order', JSON.stringify(state.sessions.map(s => s.name)) === JSON.stringify(['bash 1', 'api', 'bash 3']));
   ok('state saved: folders', state.sessions[1].cwd === `${work}/beta`);
   ok('state saved: active session', state.activeIndex === 1);
-  ok('state saved: window bounds', state.window && state.window.width === 1000 && state.window.height === 700);
+  ok('state saved: window bounds', state.window && state.window.width === 820 && state.window.height === 520);
   fs.rmSync(path.join(work, 'gone'), { recursive: true });
 
   // ---------- Run 2: restored ----------
@@ -74,10 +74,10 @@ async function closeWith(app, answer) {
   ok('sessions restored with names', JSON.stringify(await names(w)) === JSON.stringify(['bash 1', 'api', 'bash 3']));
   ok('active session restored', await activeName(w) === 'api');
   await run('echo "PWD=$PWD"');
-  ok('shell starts in saved folder', (await w.innerText('.tile.active .xterm-rows')).includes(`PWD=${work}/beta`));
+  ok('shell starts in saved folder', (await screenText(w, '.tile.active')).includes(`PWD=${work}/beta`));
   ok('title shows saved folder', (await w.textContent('.tile.active .title')).includes('beta'));
   const bounds = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBounds());
-  ok('window size restored', bounds.width === 1000 && bounds.height === 700);
+  ok('window size restored', bounds.width === 820 && bounds.height === 520);
   await key('Control+Shift+Enter'); await w.waitForSelector('.context-panel');
   const files = await w.$$eval('.ctx-file', els => els.map(e => e.getAttribute('title')));
   const cmds = await w.$$eval('.ctx-cmd code', els => els.map(e => e.textContent));
@@ -96,7 +96,7 @@ async function closeWith(app, answer) {
 
   // Missing folder falls back to home
   await key('Alt+3'); await run('echo "PWD=$PWD"');
-  ok('deleted folder falls back to home', (await w.innerText('.tile.active .xterm-rows')).includes(`PWD=${os.homedir()}`));
+  ok('deleted folder falls back to home', (await screenText(w, '.tile.active')).includes(`PWD=${os.homedir()}`));
 
   // Find bar
   await key('Alt+1');
@@ -115,7 +115,7 @@ async function closeWith(app, answer) {
   await w.keyboard.press('Escape'); await w.waitForTimeout(150);
   ok('Esc closes find bar', (await w.$('.find-bar')) === null);
   await run('echo after-find-$((3+4))');
-  ok('terminal gets keys after find', (await w.innerText('.tile.active .xterm-rows')).includes('after-find-7'));
+  ok('terminal gets keys after find', (await screenText(w, '.tile.active')).includes('after-find-7'));
 
   // Links: Ctrl+click opens, plain click doesn't
   await app.evaluate(({ shell }) => { global.__opened = []; shell.openExternal = async (u) => { global.__opened.push(u); }; });

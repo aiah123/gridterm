@@ -58,14 +58,45 @@ async function waitForShell(w, timeout = 30000) {
   await w.waitForFunction(() => !!document.querySelector('.tile.active .title .cwd'), null, { timeout });
 }
 
+/**
+ * Text in a session's terminal buffer (scrollback + screen), read through
+ * xterm's API, so it works with both the GPU (canvas) and DOM renderers.
+ */
+async function screenText(w, tileSelector = '.tile.active') {
+  return w.evaluate((sel) => {
+    const tile = document.querySelector(sel);
+    const term = tile && window.__gridtermTerminals?.get(Number(tile.dataset.sessionId));
+    if (!term) return '';
+    const buf = term.buffer.active;
+    const lines = [];
+    for (let i = 0; i < buf.length; i++) lines.push(buf.getLine(i)?.translateToString(true) ?? '');
+    return lines.join('\n');
+  }, tileSelector);
+}
+
+/** Retry a check until it's true or the timeout passes (for slower CI machines). */
+async function eventually(check, timeout = 5000, interval = 100) {
+  const end = Date.now() + timeout;
+  for (;;) {
+    try { if (await check()) return true; } catch { /* retry */ }
+    if (Date.now() > end) return false;
+    await new Promise((r) => setTimeout(r, interval));
+  }
+}
+
 /** Print what the terminals show, to make CI failures readable. */
 async function dumpTerminals(w, label = 'terminals') {
   try {
-    const rows = await w.$$eval('.tile', (tiles) => tiles.map((t) => `[${t.querySelector('.title')?.textContent}]\n` + (t.querySelector('.xterm-rows')?.innerText ?? '').split('\n').filter((l) => l.trim()).slice(-15).join('\n')));
-    console.log(`INFO ${label}:\n${rows.join('\n---\n')}`);
+    const ids = await w.$$eval('.tile', (tiles) => tiles.map((t) => [t.dataset.sessionId, t.querySelector('.title')?.textContent ?? '']));
+    const parts = [];
+    for (const [id, title] of ids) {
+      const text = await screenText(w, `.tile[data-session-id="${id}"]`);
+      parts.push(`[${title}]\n` + text.split('\n').filter((l) => l.trim()).slice(-15).join('\n'));
+    }
+    console.log(`INFO ${label}:\n${parts.join('\n---\n')}`);
   } catch (e) {
     console.log(`INFO could not read terminals: ${e.message}`);
   }
 }
 
-module.exports = { isMac, LINUX_KEYS, withTestKeys, prepareConfigDir, realTempDir, LINK_MODIFIER, quitApp, waitForShell, dumpTerminals };
+module.exports = { isMac, LINUX_KEYS, withTestKeys, prepareConfigDir, realTempDir, LINK_MODIFIER, quitApp, waitForShell, dumpTerminals, screenText, eventually };

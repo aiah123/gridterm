@@ -7,7 +7,7 @@ const { _electron } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { prepareConfigDir, realTempDir, waitForShell, dumpTerminals } = require('./helpers.cjs');
+const { prepareConfigDir, realTempDir, waitForShell, dumpTerminals, screenText } = require('./helpers.cjs');
 let page = null;
 const shellName = process.argv[2] || 'bash';
 const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + `[${shellName}] ${name}`); if (!cond) process.exitCode = 1; };
@@ -46,7 +46,7 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + `[${shellN
   // ---- 2. Forged messages from program output are ignored ----
   await run(`cd '${work}'`);
   await run('cat evil.txt');
-  ok('nonce is not visible to programs', await (async () => { await run('echo "N=[$GRIDTERM_NONCE]"'); return (await w.innerText('.tile.active .xterm-rows')).includes('N=[]'); })());
+  ok('nonce is not visible to programs', await (async () => { await run('echo "N=[$GRIDTERM_NONCE]"'); return (await screenText(w, '.tile.active')).includes('N=[]'); })());
   // A genuine multi-line command (quote continued onto a second line).
   await w.keyboard.type("echo 'ml-a\n"); await w.waitForTimeout(300);
   await w.keyboard.type("ml-b'\n"); await w.waitForTimeout(700);
@@ -60,9 +60,9 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + `[${shellN
   ok('forged folder ignored', (await w.textContent('.ctx-cwd')) === work);
 
   // Clicking a multi-line command inserts one line and runs nothing.
-  const before = (await w.innerText('.tile.focused .xterm-rows')).split('\n').filter(l => /^ml-a ml-b$|^ml-a$/.test(l.trim())).length;
+  const before = (await screenText(w, '.tile.focused')).split('\n').filter(l => /^ml-a ml-b$|^ml-a$/.test(l.trim())).length;
   await w.click('.ctx-cmd:has-text("ml-a")'); await w.waitForTimeout(800);
-  const rows = (await w.innerText('.tile.focused .xterm-rows')).split('\n').map(l => l.trimEnd());
+  const rows = (await screenText(w, '.tile.focused')).split('\n').map(l => l.trimEnd());
   const last = rows.filter(l => l.trim()).pop();
   ok('clicked command inserted as one line', /echo 'ml-a ml-b'$/.test(last));
   ok('clicked command not executed', rows.filter(l => /^ml-a ml-b$|^ml-a$/.test(l.trim())).length === before);
@@ -81,7 +81,7 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + `[${shellN
   await w.evaluate((u) => { const f = document.createElement('iframe'); f.src = u; document.body.appendChild(f); }, 'file://' + path.join(work, 'evil.html'));
   await w.waitForTimeout(2000);
   ok('foreign iframe could not run a command', !fs.existsSync(pwned));
-  ok('app still works', await (async () => { await run('echo still-$((2*21))'); return (await w.innerText('.tile.active .xterm-rows')).includes('still-42'); })());
+  ok('app still works', await (async () => { await run('echo still-$((2*21))'); return (await screenText(w, '.tile.active')).includes('still-42'); })());
 
   if (process.exitCode) await dumpTerminals(w);
   await app.close();

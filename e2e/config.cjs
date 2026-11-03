@@ -4,7 +4,7 @@ const { _electron } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { withTestKeys, isMac } = require('./helpers.cjs');
+const { withTestKeys, isMac, screenText, eventually } = require('./helpers.cjs');
 const S = process.argv[2];
 const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + name); if (!cond) process.exitCode = 1; };
 
@@ -24,6 +24,7 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + name); if 
     await app.evaluate(({ BrowserWindow }, ev) => BrowserWindow.getAllWindows()[0].webContents.sendInputEvent(ev), { type: 'keyDown', keyCode: k, modifiers: parts.map(m => map[m]) });
     await w.waitForTimeout(150);
   };
+  const fileHas = (re) => eventually(() => re.test(fs.readFileSync(cfgFile, 'utf8')));
   const cssVar = (name) => w.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name);
   const tiles = () => w.$$eval('.tile', els => els.length);
   const write = async (text) => { fs.writeFileSync(cfgFile, withTestKeys(text)); await w.waitForTimeout(700); };
@@ -70,14 +71,14 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + name); if 
   ok('settings opens with Ctrl+Shift+,', true);
   await w.click('.theme-card[data-theme="Tokyo Night"]'); await w.waitForTimeout(500);
   ok('theme card applies theme', await cssVar('--term-bg') === '#1a1b26');
-  ok('theme saved to file', /theme = "Tokyo Night"/.test(fs.readFileSync(cfgFile, 'utf8')));
+  ok('theme saved to file', (await fileHas(/theme = "Tokyo Night"/)));
   await w.fill('#font-size', '15'); await w.press('#font-size', 'Enter'); await w.waitForTimeout(500);
-  ok('font size from settings', await w.$eval('.tile', e => e.dataset.fontSize) === '15' && /size = 15/.test(fs.readFileSync(cfgFile, 'utf8')));
+  ok('font size from settings', await w.$eval('.tile', e => e.dataset.fontSize) === '15' && (await fileHas(/size = 15/)));
   await w.fill('#font-size', '3'); await w.press('#font-size', 'Enter'); await w.waitForTimeout(300);
-  ok('out-of-range size rejected with message', /font\.size should be/.test(await w.textContent('[data-testid="toast-settings"]').catch(() => '')) && /size = 15/.test(fs.readFileSync(cfgFile, 'utf8')));
+  ok('out-of-range size rejected with message', /font\.size should be/.test(await w.textContent('[data-testid="toast-settings"]').catch(() => '')) && (await fileHas(/size = 15/)));
   await w.click('[data-testid="toast-settings"] .icon-btn');
   await w.selectOption('#cursor-style', 'bar'); await w.waitForTimeout(300);
-  ok('cursor style saved', /style = "bar"/.test(fs.readFileSync(cfgFile, 'utf8')));
+  ok('cursor style saved', (await fileHas(/style = "bar"/)));
   if (S) await w.screenshot({ path: `${S}/settings-appearance.png` });
 
   // Shortcut recording
@@ -88,11 +89,11 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + name); if 
   ok('recording rejects a clash', /already used by “New session”/.test(await w.textContent('tr[data-command="nav-up"]')));
   ok('clash did not open a session', await tiles() === before + 1);
   await key('Control+Shift+K'); await w.waitForTimeout(500);
-  ok('recorded shortcut saved', /nav-up = "Ctrl\+Shift\+K"/.test(fs.readFileSync(cfgFile, 'utf8')));
+  ok('recorded shortcut saved', (await fileHas(/nav-up = "Ctrl\+Shift\+K"/)));
   ok('table shows new shortcut', (await w.textContent('tr[data-command="nav-up"] .kbd')) === (isMac ? '⌃⇧K' : 'Ctrl+Shift+K'));
   if (S) await w.screenshot({ path: `${S}/settings-shortcuts.png` });
   await w.click('tr[data-command="nav-up"] .btn:has-text("Reset")'); await w.waitForTimeout(400);
-  ok('reset removes override', !/nav-up/.test(fs.readFileSync(cfgFile, 'utf8')));
+  ok('reset removes override', await eventually(() => !/nav-up/.test(fs.readFileSync(cfgFile, 'utf8'))));
   await w.keyboard.press('Escape'); await w.waitForTimeout(200);
   ok('Esc closes settings', (await w.$('.settings')) === null);
 
@@ -106,7 +107,7 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + name); if 
   ok('copy puts selection on clipboard', (await app.evaluate(({ clipboard }) => clipboard.readText())) === 'copytest');
   await app.evaluate(({ clipboard }) => clipboard.writeText('echo pasted-$((6*7))'));
   await key('Control+Shift+V'); await w.keyboard.press('Enter'); await w.waitForTimeout(600);
-  ok('paste types clipboard into terminal', /pasted-42/.test(await w.innerText('.tile.active .xterm-rows')));
+  ok('paste types clipboard into terminal', /pasted-42/.test(await screenText(w, '.tile.active')));
   const size0 = Number(await w.$eval('.tile.active', e => e.dataset.fontSize));
   await key('Control+Shift+='); await key('Control+Shift+=');
   ok('zoom in grows active tile only', Number(await w.$eval('.tile.active', e => e.dataset.fontSize)) === size0 + 2 &&
