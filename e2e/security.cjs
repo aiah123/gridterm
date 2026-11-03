@@ -7,7 +7,8 @@ const { _electron } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { prepareConfigDir, realTempDir } = require('./helpers.cjs');
+const { prepareConfigDir, realTempDir, waitForShell, dumpTerminals } = require('./helpers.cjs');
+let page = null;
 const shellName = process.argv[2] || 'bash';
 const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + `[${shellName}] ${name}`); if (!cond) process.exitCode = 1; };
 
@@ -32,6 +33,7 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + `[${shellN
     env: { ...process.env, SHELL: shellPath, GRIDTERM_CONFIG_DIR: prepareConfigDir() }
   });
   const w = await app.firstWindow();
+  page = w;
   const key = async (accel) => {
     const parts = accel.split('+'); const k = parts.pop();
     const map = { Control: 'control', Shift: 'shift', Alt: 'alt' };
@@ -39,7 +41,7 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + `[${shellN
     await w.waitForTimeout(150);
   };
   const run = async (cmd, wait = 700) => { await w.keyboard.type(cmd + '\n'); await w.waitForTimeout(wait); };
-  await w.waitForSelector('.tile'); await w.waitForTimeout(1500);
+  await w.waitForSelector('.tile'); await waitForShell(w);
 
   // ---- 2. Forged messages from program output are ignored ----
   await run(`cd '${work}'`);
@@ -81,6 +83,7 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + `[${shellN
   ok('foreign iframe could not run a command', !fs.existsSync(pwned));
   ok('app still works', await (async () => { await run('echo still-$((2*21))'); return (await w.innerText('.tile.active .xterm-rows')).includes('still-42'); })());
 
+  if (process.exitCode) await dumpTerminals(w);
   await app.close();
   fs.rmSync(work, { recursive: true, force: true });
-})().catch(e => { console.error(e); process.exit(1); });
+})().catch(async (e) => { console.error(e); if (page) await dumpTerminals(page); process.exit(1); });

@@ -50,4 +50,22 @@ async function quitApp(app) {
   await exited;
 }
 
-module.exports = { isMac, LINUX_KEYS, withTestKeys, prepareConfigDir, realTempDir, LINK_MODIFIER, quitApp };
+/**
+ * Wait until the active session's shell is at its first prompt (shell
+ * integration has reported the directory), instead of guessing with a delay.
+ */
+async function waitForShell(w, timeout = 30000) {
+  await w.waitForFunction(() => !!document.querySelector('.tile.active .title .cwd'), null, { timeout });
+}
+
+/** Print what the terminals show, to make CI failures readable. */
+async function dumpTerminals(w, label = 'terminals') {
+  try {
+    const rows = await w.$$eval('.tile', (tiles) => tiles.map((t) => `[${t.querySelector('.title')?.textContent}]\n` + (t.querySelector('.xterm-rows')?.innerText ?? '').split('\n').filter((l) => l.trim()).slice(-15).join('\n')));
+    console.log(`INFO ${label}:\n${rows.join('\n---\n')}`);
+  } catch (e) {
+    console.log(`INFO could not read terminals: ${e.message}`);
+  }
+}
+
+module.exports = { isMac, LINUX_KEYS, withTestKeys, prepareConfigDir, realTempDir, LINK_MODIFIER, quitApp, waitForShell, dumpTerminals };

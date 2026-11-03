@@ -76,13 +76,28 @@ export function App() {
     }
   }, [rc])
 
+  const shellFailed = useCallback(
+    (e: unknown) =>
+      showToast({
+        id: 'shell',
+        title: 'Couldn’t start a shell',
+        items: [String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')]
+      }),
+    [showToast]
+  )
+
   const newSession = useCallback(async () => {
-    const info = await window.gridterm.createSession()
+    let info
+    try {
+      info = await window.gridterm.createSession()
+    } catch (e) {
+      return shellFailed(e)
+    }
     counter.current += 1
     setSessions((s) => [...s, { id: info.id, name: `${info.shell} ${counter.current}` }])
     setActiveId(info.id)
     setFocusedId(null)
-  }, [])
+  }, [shellFailed])
 
   /** Reopen the sessions saved at the last quit, in order, with their names. */
   const restoreSessions = useCallback(async (): Promise<boolean> => {
@@ -90,14 +105,20 @@ export function App() {
     if (!saved) return false
     const created: Session[] = []
     for (let i = 0; i < saved.sessions.length; i++) {
-      const info = await window.gridterm.createSession({ restoreIndex: i })
-      created.push({ id: info.id, name: saved.sessions[i].name })
+      try {
+        const info = await window.gridterm.createSession({ restoreIndex: i })
+        created.push({ id: info.id, name: saved.sessions[i].name })
+      } catch (e) {
+        shellFailed(e)
+        break
+      }
     }
+    if (!created.length) return true
     counter.current = created.length
     setSessions(created)
     setActiveId(created[saved.activeIndex]?.id ?? created[0].id)
     return true
-  }, [])
+  }, [shellFailed])
 
   const rename = useCallback((id: number, name: string) => {
     const trimmed = name.trim()

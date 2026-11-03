@@ -14,7 +14,9 @@
     "test:e2e:config": "node e2e/config.cjs",
     "test:e2e:all": "node e2e/run-all.cjs",
     "test:e2e:restore": "node e2e/restore.cjs",
-    "test:e2e:security": "node e2e/security.cjs bash && node e2e/security.cjs zsh"
+    "test:e2e:security": "node e2e/security.cjs bash && node e2e/security.cjs zsh",
+    "postinstall": "node scripts/fix-node-pty.cjs",
+    "test:shell": "node e2e/shell.cjs"
   },
   "keywords": [],
   "author": "",

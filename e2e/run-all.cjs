@@ -4,7 +4,7 @@ const { spawnSync } = require('child_process');
 const path = require('path');
 
 const suites = [
-  ['smoke.cjs'], ['config.cjs'], ['restore.cjs'],
+  ['shell.cjs'], ['smoke.cjs'], ['config.cjs'], ['restore.cjs'],
   ['context.cjs', 'bash'], ['context.cjs', 'zsh'],
   ['security.cjs', 'bash'], ['security.cjs', 'zsh']
 ];
@@ -15,7 +15,8 @@ for (const [file, ...args] of suites) {
   console.log(`\n=== ${name} ===`);
   const r = spawnSync(process.execPath, [path.join(__dirname, file), ...args], { encoding: 'utf8', timeout: 5 * 60 * 1000 });
   const out = `${r.stdout ?? ''}${r.stderr ?? ''}`;
-  process.stdout.write(out.split('\n').filter((l) => /^(PASS|FAIL|INFO)|Error|^\s+at /.test(l)).join('\n') + '\n');
+  // Show results, errors and anything printed after an INFO line (terminal dumps).
+  process.stdout.write((r.status === 0 ? out.split('\n').filter((l) => /^(PASS|FAIL|INFO)/.test(l)).join('\n') : out) + '\n');
   const pass = (out.match(/^PASS /gm) ?? []).length;
   const fail = (out.match(/^FAIL /gm) ?? []).length;
   const ok = r.status === 0 && fail === 0 && pass > 0;

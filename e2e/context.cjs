@@ -5,7 +5,8 @@ const { _electron } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { prepareConfigDir, realTempDir } = require('./helpers.cjs');
+const { prepareConfigDir, realTempDir, waitForShell, dumpTerminals } = require('./helpers.cjs');
+let page = null;
 const shellName = process.argv[2] || 'bash';
 const S = process.argv[3];
 const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + `[${shellName}] ${name}`); if (!cond) process.exitCode = 1; };
@@ -24,6 +25,7 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + `[${shellN
     env: { ...process.env, SHELL: shellPath, GRIDTERM_CONFIG_DIR: prepareConfigDir() }
   });
   const w = await app.firstWindow();
+  page = w;
   const key = async (accel) => {
     const parts = accel.split('+'); const k = parts.pop();
     const map = { Control: 'control', Shift: 'shift', Alt: 'alt' };
@@ -32,7 +34,7 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + `[${shellN
   };
   const run = async (cmd, wait = 700) => { await w.keyboard.type(cmd + '\n'); await w.waitForTimeout(wait); };
 
-  await w.waitForSelector('.tile'); await w.waitForTimeout(1500);
+  await w.waitForSelector('.tile'); await waitForShell(w);
   await run(`cd '${work}'`);
   ok('title shows cwd', (await w.textContent('.tile.active .title')).includes(path.basename(work)));
   await run('cat notes.txt');
@@ -100,9 +102,10 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + `[${shellN
 
   // Context is per session
   await w.mouse.click(5, 5); // exit focus
-  await key('Control+Shift+T'); await w.waitForTimeout(1500);
+  await key('Control+Shift+T'); await waitForShell(w);
   await key('Control+Shift+Enter'); await w.waitForSelector('.context-panel');
   ok('new session has its own empty context', (await w.$$('.ctx-file')).length === 0);
+  if (process.exitCode) await dumpTerminals(w);
   await app.close();
   fs.rmSync(work, { recursive: true, force: true });
-})().catch(e => { console.error(e); process.exit(1); });
+})().catch(async (e) => { console.error(e); if (page) await dumpTerminals(page); process.exit(1); });

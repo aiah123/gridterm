@@ -69,8 +69,13 @@ else
   __gt_debug() {
     [ "$__gt_ready" = 1 ] || return 0
     [ -n "${COMP_LINE:-}" ] && return 0   # tab completion
-    # Enter on an empty line runs no command: the next trap is our own prompt hook.
+    # Prompt hooks (ours or others', e.g. systemd's) are not user commands.
+    # This also covers Enter on an empty line, where the next trap is a hook.
     case $BASH_COMMAND in __gt_prompt_start*) return 0;; esac
+    local __gt_pc
+    for __gt_pc in "${PROMPT_COMMAND[@]}"; do
+      [ "$BASH_COMMAND" = "$__gt_pc" ] && return 0
+    done
     __gt_ready=0
     __gt_preexec "$BASH_COMMAND"
   }
@@ -78,7 +83,13 @@ else
   __gt_prompt_end() { __gt_ready=1; }
   # Our start hook runs first (to see the command's exit code) and the end hook
   # last, so the user's own PROMPT_COMMAND doesn't look like a new command.
-  PROMPT_COMMAND="__gt_prompt_start${PROMPT_COMMAND:+;$PROMPT_COMMAND};__gt_prompt_end"
+  # PROMPT_COMMAND may be a string or (bash 5.1+) an array; systemd's
+  # profile script on newer distros turns it into an array and appends to it.
+  if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
+    PROMPT_COMMAND=(__gt_prompt_start "${PROMPT_COMMAND[@]}" __gt_prompt_end)
+  else
+    PROMPT_COMMAND="__gt_prompt_start${PROMPT_COMMAND:+;$PROMPT_COMMAND};__gt_prompt_end"
+  fi
   __gt_prev_debug=$(trap -p DEBUG)
   if [ -n "$__gt_prev_debug" ]; then
     eval "__gt_prev_debug_fn() { $(eval "set -- $__gt_prev_debug"; echo "$3"); }"

@@ -5,7 +5,8 @@ const { _electron } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { withTestKeys, prepareConfigDir, realTempDir, LINK_MODIFIER, isMac } = require('./helpers.cjs');
+const { withTestKeys, prepareConfigDir, realTempDir, LINK_MODIFIER, isMac, waitForShell, dumpTerminals } = require('./helpers.cjs');
+let page = null;
 const S = process.argv[2];
 const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + name); if (!cond) process.exitCode = 1; };
 const dir = path.resolve(__dirname, '..');
@@ -21,6 +22,7 @@ async function launch() {
     env: { ...process.env, GRIDTERM_CONFIG_DIR: cfgDir, SHELL: '/bin/bash' }
   });
   const w = await app.firstWindow();
+  page = w;
   const key = async (accel) => {
     const parts = accel.split('+'); const k = parts.pop();
     const map = { Control: 'control', Shift: 'shift', Alt: 'alt' };
@@ -28,7 +30,7 @@ async function launch() {
     await w.waitForTimeout(150);
   };
   const run = async (cmd, wait = 600) => { await w.keyboard.type(cmd + '\n'); await w.waitForTimeout(wait); };
-  await w.waitForSelector('.tile'); await w.waitForTimeout(1200);
+  await w.waitForSelector('.tile'); await waitForShell(w);
   return { app, w, key, run };
 }
 const names = (w) => w.$$eval('.tile .title-text', els => els.map(e => e.textContent.split(' — ')[0]));
@@ -50,11 +52,11 @@ async function closeWith(app, answer) {
   // ---------- Run 1: set up three sessions ----------
   let { app, w, key, run } = await launch();
   await run(`cd '${work}/alpha'`);
-  await key('Control+Shift+T'); await w.waitForTimeout(800);
+  await key('Control+Shift+T'); await waitForShell(w);
   await run(`cd '${work}/beta' && cat app.ts`);
   await w.dblclick('.tile.active .title');
   await w.fill('.rename', 'api'); await w.keyboard.press('Enter');
-  await key('Control+Shift+T'); await w.waitForTimeout(800);
+  await key('Control+Shift+T'); await waitForShell(w);
   await run(`cd '${work}/gone'`);
   await key('Alt+2'); // make "api" active
   await app.evaluate(({ BrowserWindow }) => { const b = BrowserWindow.getAllWindows()[0]; b.unmaximize(); b.setBounds({ x: 60, y: 50, width: 1000, height: 700 }); });
@@ -150,4 +152,4 @@ async function closeWith(app, answer) {
 
   fs.rmSync(cfgDir, { recursive: true, force: true });
   fs.rmSync(work, { recursive: true, force: true });
-})().catch(e => { console.error(e); process.exit(1); });
+})().catch(async (e) => { console.error(e); if (page) await dumpTerminals(page).catch(() => {}); process.exit(1); });
