@@ -3,11 +3,12 @@
 const { _electron } = require('playwright');
 const S = process.argv[2]; // optional screenshot dir
 const path = require('path');
+const { prepareConfigDir } = require('./helpers.cjs');
 const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + name); if (!cond) process.exitCode = 1; };
 (async () => {
   const dir = path.resolve(__dirname, '..');
   const app = await _electron.launch({ args: [dir + '/out/main/index.js', '--no-sandbox'], cwd: dir, executablePath: require(path.join(dir, 'node_modules/electron')),
-    env: { ...process.env, GRIDTERM_CONFIG_DIR: require('fs').mkdtempSync(path.join(require('os').tmpdir(), 'gt-cfg-')) } });
+    env: { ...process.env, GRIDTERM_CONFIG_DIR: prepareConfigDir() } });
   const w = await app.firstWindow();
   const cmd = (c) => app.evaluate(({ BrowserWindow }, c) => BrowserWindow.getAllWindows()[0].webContents.send('app:command', c), c);
   const key = async (accel) => {
@@ -39,8 +40,7 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + name); if 
   // Rename by double-clicking the title bar
   await w.dblclick('.tile[data-session-id="2"] .title');
   await w.waitForSelector('.rename');
-  await w.keyboard.press('Control+A');
-  await w.keyboard.type('server');
+  await w.fill('.rename', 'server');
   await w.keyboard.press('Enter');
   ok('rename via double-click', (await w.textContent('.tile[data-session-id="2"] .title')).trim().startsWith('server'));
   ok('renamed tile is active', await active() === '2');

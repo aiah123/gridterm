@@ -138,3 +138,28 @@ export interface ResolvedConfig {
   configPath: string
   platform: string
 }
+
+/**
+ * Check a settings-screen update before it touches the config file. Only
+ * known settings are allowed (so names like "__proto__" can never be used as
+ * keys), and values must pass the same rules as the file. `undefined` resets
+ * a setting to its default. Returns an error message, or null if allowed.
+ */
+export function validateUpdate(keyPath: unknown, value: unknown, platform: string): string | null {
+  if (!Array.isArray(keyPath) || !keyPath.every((k) => typeof k === 'string')) return 'Invalid setting path.'
+  const [section, field, ...rest] = keyPath as string[]
+  if (rest.length) return `Unknown setting: ${keyPath.join('.')}`
+  if (section === 'theme' && field === undefined) {
+    return value === undefined || (typeof value === 'string' && value.length <= 200) ? null : 'theme should be a theme name.'
+  }
+  if (section === 'keys' && typeof field === 'string' && isCommand(field)) {
+    if (value === undefined || value === false) return null
+    const parsed = typeof value === 'string' ? parseAccelerator(value, platform) : null
+    if (!parsed) return `keys.${field}: not a valid shortcut.`
+    return isBareKey(parsed) ? `keys.${field}: needs a modifier key.` : null
+  }
+  const rule = Object.prototype.hasOwnProperty.call(RULES, section) && typeof field === 'string' && Object.prototype.hasOwnProperty.call(RULES[section], field) ? RULES[section][field] : undefined
+  if (!rule) return `Unknown setting: ${keyPath.join('.')}`
+  if (value === undefined || rule[0](value)) return null
+  return `${section}.${field} should be ${rule[1]}.`
+}

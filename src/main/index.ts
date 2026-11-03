@@ -8,6 +8,7 @@ import { ContextTracker } from './contextTracker'
 import { ConfigService } from './configService'
 import { SavedState, StateStore, WindowBounds } from './stateStore'
 import { isTrustedUrl } from './trust'
+import { IPC_SCHEMA, validArgs } from './ipcSchema'
 import type { AppCommand, FileReadResult, RestoreInfo } from '../shared/api'
 import { COMMAND_LABELS, SELECT_NUMS } from '../shared/commands'
 import type { ResolvedConfig } from '../shared/config'
@@ -39,17 +40,25 @@ function fromApp(event: IpcMainEvent | IpcMainInvokeEvent): boolean {
   return !!win && event.sender === win.webContents && !!frame && frame.parent === null && isTrustedUrl(frame.url, APP_URL)
 }
 
-/** ipcMain.on that ignores messages not sent by Gridterm's own page. */
+function requireSchema(channel: string): void {
+  // Every channel must declare its arguments in ipcSchema.ts.
+  if (!IPC_SCHEMA[channel]) throw new Error(`IPC channel "${channel}" has no schema`)
+}
+
+/** ipcMain.on that ignores messages not sent by Gridterm's own page or with unexpected arguments. */
 function on(channel: string, listener: (event: IpcMainEvent, ...args: any[]) => void): void {
+  requireSchema(channel)
   ipcMain.on(channel, (event, ...args) => {
-    if (fromApp(event)) listener(event, ...args)
+    if (fromApp(event) && validArgs(channel, args)) listener(event, ...args)
   })
 }
 
-/** ipcMain.handle that rejects calls not made by Gridterm's own page. */
+/** ipcMain.handle that rejects calls not made by Gridterm's own page or with unexpected arguments. */
 function handle(channel: string, listener: (event: IpcMainInvokeEvent, ...args: any[]) => unknown): void {
+  requireSchema(channel)
   ipcMain.handle(channel, (event, ...args) => {
     if (!fromApp(event)) throw new Error('Rejected: request did not come from Gridterm.')
+    if (!validArgs(channel, args)) throw new Error(`Rejected: invalid arguments for ${channel}.`)
     return listener(event, ...args)
   })
 }
@@ -258,8 +267,11 @@ function createWindow(): void {
     title: 'Gridterm',
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
+      // These are Electron's defaults; set explicitly so they can't regress.
+      sandbox: true,
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      webSecurity: true
     }
   })
   win.webContents.on('before-input-event', (event, input) => {

@@ -64,3 +64,31 @@ describe('themes', () => {
     expect(parseItermColors(xml)).toEqual({ red: '#ff0000', background: '#004080' })
   })
 })
+
+import { validateUpdate } from './config'
+
+describe('validateUpdate', () => {
+  it('allows known settings with valid values', () => {
+    expect(validateUpdate(['theme'], 'Nord', 'linux')).toBeNull()
+    expect(validateUpdate(['font', 'size'], 14, 'linux')).toBeNull()
+    expect(validateUpdate(['font', 'size'], undefined, 'linux')).toBeNull()
+    expect(validateUpdate(['keys', 'nav-up'], 'Ctrl+Shift+Up', 'linux')).toBeNull()
+    expect(validateUpdate(['keys', 'nav-up'], false, 'linux')).toBeNull()
+    expect(validateUpdate(['app', 'confirmQuit'], false, 'linux')).toBeNull()
+  })
+
+  it('rejects unknown or dangerous paths', () => {
+    for (const p of [['__proto__', 'polluted'], ['constructor', 'prototype'], ['font', '__proto__'], ['keys', '__proto__'], ['font', 'size', 'x'], ['themes', 'Mine'], [], 'font.size', [1, 2]]) {
+      expect(validateUpdate(p, 1, 'linux')).not.toBeNull()
+    }
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined()
+  })
+
+  it('rejects bad values', () => {
+    expect(validateUpdate(['font', 'size'], 500, 'linux')).toMatch(/6 to 72/)
+    expect(validateUpdate(['cursor', 'style'], 'box', 'linux')).not.toBeNull()
+    expect(validateUpdate(['keys', 'copy'], 'K', 'linux')).toMatch(/modifier/)
+    expect(validateUpdate(['keys', 'copy'], 'Hyper+K', 'linux')).toMatch(/valid shortcut/)
+    expect(validateUpdate(['theme'], 5, 'linux')).not.toBeNull()
+  })
+})

@@ -4,6 +4,7 @@ const { _electron } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { withTestKeys, isMac } = require('./helpers.cjs');
 const S = process.argv[2];
 const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + name); if (!cond) process.exitCode = 1; };
 
@@ -25,7 +26,7 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + name); if 
   };
   const cssVar = (name) => w.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name);
   const tiles = () => w.$$eval('.tile', els => els.length);
-  const write = async (text) => { fs.writeFileSync(cfgFile, text); await w.waitForTimeout(700); };
+  const write = async (text) => { fs.writeFileSync(cfgFile, withTestKeys(text)); await w.waitForTimeout(700); };
 
   await w.waitForSelector('.tile'); await w.waitForTimeout(1200);
   ok('default config file created with header', fs.readFileSync(cfgFile, 'utf8').startsWith('# Gridterm settings'));
@@ -88,7 +89,7 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + name); if 
   ok('clash did not open a session', await tiles() === before + 1);
   await key('Control+Shift+K'); await w.waitForTimeout(500);
   ok('recorded shortcut saved', /nav-up = "Ctrl\+Shift\+K"/.test(fs.readFileSync(cfgFile, 'utf8')));
-  ok('table shows new shortcut', (await w.textContent('tr[data-command="nav-up"] .kbd')) === 'Ctrl+Shift+K');
+  ok('table shows new shortcut', (await w.textContent('tr[data-command="nav-up"] .kbd')) === (isMac ? '⌃⇧K' : 'Ctrl+Shift+K'));
   if (S) await w.screenshot({ path: `${S}/settings-shortcuts.png` });
   await w.click('tr[data-command="nav-up"] .btn:has-text("Reset")'); await w.waitForTimeout(400);
   ok('reset removes override', !/nav-up/.test(fs.readFileSync(cfgFile, 'utf8')));

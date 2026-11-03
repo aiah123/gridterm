@@ -1,5 +1,7 @@
 # Gridterm
 
+[![CI](https://github.com/aiah123/gridterm/actions/workflows/ci.yml/badge.svg)](https://github.com/aiah123/gridterm/actions/workflows/ci.yml)
+
 A terminal for macOS and Linux that shows all your sessions at once, laid out as an even grid.
 
 ## Status
@@ -42,8 +44,10 @@ If `npm install` fails while building `node-pty`, check that the toolchain above
 npm run dev        # run with hot reload
 npm test           # unit tests
 npm run typecheck
-npm run build && npm run test:e2e:all   # end-to-end tests, incl. security (use xvfb-run -a on headless Linux)
+npm run build && npm run test:e2e:all   # all end-to-end suites (use xvfb-run -a on headless Linux)
 ```
+
+CI runs `npm audit`, the type check, the unit tests and every end-to-end suite on Linux and macOS for each push and pull request.
 
 ## Shortcuts
 | Action | macOS | Linux |

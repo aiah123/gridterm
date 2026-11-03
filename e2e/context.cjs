@@ -5,13 +5,14 @@ const { _electron } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { prepareConfigDir, realTempDir } = require('./helpers.cjs');
 const shellName = process.argv[2] || 'bash';
 const S = process.argv[3];
 const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + `[${shellName}] ${name}`); if (!cond) process.exitCode = 1; };
 
 (async () => {
   const dir = path.resolve(__dirname, '..');
-  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-e2e-'));
+  const work = realTempDir('gt-e2e-');
   fs.writeFileSync(path.join(work, 'notes.txt'), 'hello\nworld\n');
   fs.writeFileSync(path.join(work, "it's here.md"), '# quoted\n');
   fs.writeFileSync(path.join(work, 'held.txt'), 'held open\n');
@@ -20,7 +21,7 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + `[${shellN
   const app = await _electron.launch({
     args: [path.join(dir, 'out/main/index.js'), '--no-sandbox'], cwd: dir,
     executablePath: require(path.join(dir, 'node_modules/electron')),
-    env: { ...process.env, SHELL: shellPath, GRIDTERM_CONFIG_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'gt-cfg-')) }
+    env: { ...process.env, SHELL: shellPath, GRIDTERM_CONFIG_DIR: prepareConfigDir() }
   });
   const w = await app.firstWindow();
   const key = async (accel) => {

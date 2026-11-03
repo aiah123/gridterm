@@ -241,6 +241,7 @@ function RenameInput(props: { initial: string; onDone(name: string): void; onCan
       ref={ref}
       className="rename"
       value={value}
+      maxLength={200}
       spellCheck={false}
       onChange={(e) => setValue(e.target.value)}
       onKeyDown={(e) => {

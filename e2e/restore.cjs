@@ -5,11 +5,12 @@ const { _electron } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { withTestKeys, prepareConfigDir, realTempDir, LINK_MODIFIER, isMac } = require('./helpers.cjs');
 const S = process.argv[2];
 const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + name); if (!cond) process.exitCode = 1; };
 const dir = path.resolve(__dirname, '..');
-const cfgDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-cfg-'));
-const work = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gt-work-')));
+const cfgDir = prepareConfigDir();
+const work = realTempDir('gt-work-');
 for (const d of ['alpha', 'beta', 'gone']) fs.mkdirSync(path.join(work, d));
 fs.writeFileSync(path.join(work, 'beta', 'app.ts'), 'const answer: number = 42 // the answer\nexport function hi() { return "hi" }\n');
 
@@ -39,7 +40,7 @@ async function closeWith(app, answer) {
     dialog.showMessageBox = async (_w, opts) => { global.__dialogMessages.push(`${opts.message} ${opts.detail}`); return { response: answer }; };
   }, answer);
   const closed = new Promise((r) => app.process().once('exit', r));
-  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close());
+  await app.evaluate(({ app }) => app.quit()); // like Cmd+Q / closing the window
   if (answer === 1) { await closed; return null; }
   await new Promise((r) => setTimeout(r, 800));
   return app.evaluate(() => global.__dialogMessages);
@@ -52,7 +53,7 @@ async function closeWith(app, answer) {
   await key('Control+Shift+T'); await w.waitForTimeout(800);
   await run(`cd '${work}/beta' && cat app.ts`);
   await w.dblclick('.tile.active .title');
-  await w.keyboard.press('Control+A'); await w.keyboard.type('api'); await w.keyboard.press('Enter');
+  await w.fill('.rename', 'api'); await w.keyboard.press('Enter');
   await key('Control+Shift+T'); await w.waitForTimeout(800);
   await run(`cd '${work}/gone'`);
   await key('Alt+2'); // make "api" active
@@ -121,9 +122,9 @@ async function closeWith(app, answer) {
   await w.mouse.move(scr.x + 40, scr.y + 8); await w.waitForTimeout(300);
   await w.mouse.click(scr.x + 40, scr.y + 8); await w.waitForTimeout(200);
   ok('plain click does not open link', (await app.evaluate(() => global.__opened)).length === 0);
-  await w.keyboard.down('Control'); await w.mouse.move(scr.x + 42, scr.y + 8); await w.waitForTimeout(300);
-  await w.mouse.click(scr.x + 42, scr.y + 8); await w.keyboard.up('Control'); await w.waitForTimeout(300);
-  ok('Ctrl+click opens link', JSON.stringify(await app.evaluate(() => global.__opened)) === JSON.stringify(['https://example.com/docs']));
+  await w.keyboard.down(LINK_MODIFIER); await w.mouse.move(scr.x + 42, scr.y + 8); await w.waitForTimeout(300);
+  await w.mouse.click(scr.x + 42, scr.y + 8); await w.keyboard.up(LINK_MODIFIER); await w.waitForTimeout(300);
+  ok('Cmd/Ctrl+click opens link', JSON.stringify(await app.evaluate(() => global.__opened)) === JSON.stringify(['https://example.com/docs']));
 
   // Quit confirmation while a command runs
   await w.keyboard.type('sleep 30\n'); await w.waitForTimeout(3200); // let the poller notice too
@@ -135,12 +136,16 @@ async function closeWith(app, answer) {
   ok('Quit saves state; running command not saved', state2.sessions.length === 3 && !state2.sessions[0].commands.some(c => c.command === 'sleep 30'));
 
   // ---------- Run 3: restore turned off ----------
-  fs.writeFileSync(path.join(cfgDir, 'config.toml'), '[app]\nrestoreSessions = false\n');
+  fs.writeFileSync(path.join(cfgDir, 'config.toml'), withTestKeys('[app]\nrestoreSessions = false\n'));
   ({ app, w, key, run } = await launch());
   ok('restore off starts one fresh session', JSON.stringify(await names(w)) === JSON.stringify(['bash 1']) && !(await w.textContent('.tile .title')).includes('beta'));
   // Exiting the last shell closes the window and saves an empty list.
+  // (On macOS the app keeps running without a window, like other Mac apps.)
   const exited = new Promise((r) => app.process().once('exit', r));
-  await w.keyboard.type('exit\n'); await exited;
+  const windowClosed = w.waitForEvent('close');
+  await w.keyboard.type('exit\n'); await windowClosed;
+  if (isMac) await app.evaluate(({ app }) => app.quit());
+  await exited;
   ok('last shell exit saves no sessions', JSON.parse(fs.readFileSync(path.join(cfgDir, 'state.json'), 'utf8')).sessions.length === 0);
 
   fs.rmSync(cfgDir, { recursive: true, force: true });

@@ -7,12 +7,13 @@ const { _electron } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { prepareConfigDir, realTempDir } = require('./helpers.cjs');
 const shellName = process.argv[2] || 'bash';
 const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + `[${shellName}] ${name}`); if (!cond) process.exitCode = 1; };
 
 (async () => {
   const dir = path.resolve(__dirname, '..');
-  const work = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gt-sec-')));
+  const work = realTempDir('gt-sec-');
   const pwned = path.join(work, 'pwned');
   // Output that tries to forge integration messages: no nonce, and a guessed one.
   fs.writeFileSync(path.join(work, 'evil.txt'),
@@ -28,7 +29,7 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + `[${shellN
   const app = await _electron.launch({
     args: [path.join(dir, 'out/main/index.js'), '--no-sandbox'], cwd: dir,
     executablePath: require(path.join(dir, 'node_modules/electron')),
-    env: { ...process.env, SHELL: shellPath, GRIDTERM_CONFIG_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'gt-cfg-')) }
+    env: { ...process.env, SHELL: shellPath, GRIDTERM_CONFIG_DIR: prepareConfigDir() }
   });
   const w = await app.firstWindow();
   const key = async (accel) => {

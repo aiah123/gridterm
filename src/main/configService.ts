@@ -2,7 +2,7 @@ import { promises as fs, watch, FSWatcher, readFileSync, mkdirSync, writeFileSyn
 import os from 'node:os'
 import path from 'node:path'
 import { parse, stringify, TomlError } from 'smol-toml'
-import { DEFAULTS, ResolvedConfig, resolveKeys, validateConfig } from '../shared/config'
+import { DEFAULTS, ResolvedConfig, resolveKeys, validateConfig, validateUpdate } from '../shared/config'
 import { defaultKeys } from '../shared/commands'
 import { BUILTIN_THEMES, completeTheme, DEFAULT_THEME, parseItermColors, ThemeColors } from '../shared/themes'
 
@@ -155,6 +155,8 @@ export class ConfigService {
 
   /** Set one setting (value undefined = back to default) and save the file. */
   async update(keyPath: string[], value: unknown): Promise<void> {
+    const problem = validateUpdate(keyPath, value, this.platform)
+    if (problem) throw new Error(problem)
     let raw: Record<string, unknown> = {}
     try {
       raw = parse(await fs.readFile(this.file, 'utf8')) as Record<string, unknown>
