@@ -59,7 +59,7 @@ async function waitForShell(w, timeout = 30000) {
 }
 
 /**
- * Text in a session's terminal buffer (scrollback + screen), read through
+ * Text in a session's terminal buffer (scrollback + screen, wrapped rows joined), read through
  * xterm's API, so it works with both the GPU (canvas) and DOM renderers.
  */
 async function screenText(w, tileSelector = '.tile.active') {
@@ -67,9 +67,16 @@ async function screenText(w, tileSelector = '.tile.active') {
     const tile = document.querySelector(sel);
     const term = tile && window.__gridtermTerminals?.get(Number(tile.dataset.sessionId));
     if (!term) return '';
+    // Join rows that the terminal wrapped, so each entry is one logical line.
     const buf = term.buffer.active;
     const lines = [];
-    for (let i = 0; i < buf.length; i++) lines.push(buf.getLine(i)?.translateToString(true) ?? '');
+    for (let i = 0; i < buf.length; i++) {
+      const line = buf.getLine(i);
+      if (!line) continue;
+      const text = line.translateToString(true);
+      if (line.isWrapped && lines.length) lines[lines.length - 1] += text;
+      else lines.push(text);
+    }
     return lines.join('\n');
   }, tileSelector);
 }
