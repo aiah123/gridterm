@@ -39,6 +39,7 @@ integration = true
 [app]
 restoreSessions = true
 confirmQuit = true
+recordCommands = true
 
 [keys]
 nav-up = "Ctrl+Shift+Up"      # e.g. to avoid GNOME's Ctrl+Alt+Up
@@ -67,6 +68,15 @@ select-9 = false              # turn a shortcut off
 | `shell.integration` | `true` | Directory, command and file tracking for zsh and bash. Applies to new sessions. |
 | `app.restoreSessions` | `true` | Reopen the last sessions (names, folders, context) and the window size on launch. Saved in `state.json` next to `config.toml`. |
 | `app.confirmQuit` | `true` | Ask before quitting while a command is running |
+| `app.recordCommands` | `true` | Show and persist recent commands. Turning this off clears Gridterm's recorded commands and prevents restoring them; directory and file tracking remain available. |
+
+Gridterm keeps `state.json` private (`0600`) inside its private configuration
+directory (`0700`), and tightens permissions on state from earlier versions.
+Bash commands excluded by history settings (including `ignorespace`, `HISTIGNORE`,
+and disabled history) are not recorded. Leading-space zsh commands and commands
+run with `HISTSIZE=0` are not recorded. Use `app.recordCommands = false` for a
+complete opt-out from Gridterm command recording. This does not erase shell
+history, terminal scrollback, backups, or state copies saved by earlier versions.
 
 ## Themes
 

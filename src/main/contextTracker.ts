@@ -38,7 +38,8 @@ export class ContextTracker {
 
   constructor(
     private onUpdate: (id: number, ctx: SessionContext) => void,
-    private listSessions: () => { id: number; pid: number }[]
+    private listSessions: () => { id: number; pid: number }[],
+    private recordCommands: () => boolean = () => true
   ) {}
 
   get(id: number): SessionContext {
@@ -56,7 +57,7 @@ export class ContextTracker {
       cwd: ctx.cwd,
       cwdDisplay: ctx.cwd ? tildify(ctx.cwd, this.home) : null,
       files: [...ctx.files],
-      commands: [...ctx.commands]
+      commands: this.recordCommands() ? [...ctx.commands] : []
     })
     this.emit(id)
   }
@@ -73,6 +74,13 @@ export class ContextTracker {
 
   remove(id: number): void {
     this.contexts.delete(id)
+  }
+
+  clearCommands(): void {
+    for (const [id, ctx] of this.contexts) {
+      ctx.commands = []
+      this.emit(id)
+    }
   }
 
   /** True if `p` is listed in some session's context (guards file reads). */
@@ -94,6 +102,7 @@ export class ContextTracker {
       ctx.cwdDisplay = tildify(payload, this.home)
       this.emit(id)
     } else if (kind === 'cmd') {
+      if (!this.recordCommands()) return
       const command = payload.trim()
       if (!command) return
       const cwd = ctx.cwd ?? this.home

@@ -191,6 +191,14 @@ export function Settings({ rc, onClose, onError }: Props) {
 
           {tab === 'terminal' && (
             <>
+              <h3>Privacy</h3>
+              <CheckRow
+                label="Record commands"
+                id="record-commands"
+                checked={config.app.recordCommands}
+                onChange={(v) => set(['app', 'recordCommands'], v)}
+                hint="Show recent commands and save them between launches. Turning this off clears recorded commands from Gridterm's current state."
+              />
               <h3>Startup and quit</h3>
               <CheckRow
                 label="Reopen sessions"

@@ -30,3 +30,9 @@ In payloads, `\` is sent as `\\`, newline as `\n`, ESC as `\e` and BEL as `\a`.
   It works with bash 3.2 (macOS's built-in bash) and with bash-preexec.
 
 Set `GRIDTERM_NO_SHELL_INTEGRATION=1` before starting Gridterm to turn it off.
+
+Command privacy: bash only reports commands accepted into its history, respecting
+`HISTCONTROL`, `HISTIGNORE`, and `set +o history`. zsh suppresses leading-space
+commands and commands run with `HISTSIZE=0`. To disable command recording in
+Gridterm entirely, set `app.recordCommands = false` in `config.toml` or turn off
+**Record commands** in Settings. Directory tracking continues to work.

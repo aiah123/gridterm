@@ -12,7 +12,7 @@ export interface Config {
   terminal: { scrollback: number; copyOnSelect: boolean; bell: BellMode; optionIsMeta: boolean }
   window: { opacity: number; padding: number; gap: number }
   shell: { program: string; integration: boolean }
-  app: { restoreSessions: boolean; confirmQuit: boolean }
+  app: { restoreSessions: boolean; confirmQuit: boolean; recordCommands: boolean }
   /** Shortcut overrides; false disables a shortcut. */
   keys: Partial<Record<AppCommand, string | false>>
   /** Custom themes defined inline: [themes."My Theme"] background = "#..." */
@@ -28,7 +28,7 @@ export const DEFAULTS: Config = {
   terminal: { scrollback: 10000, copyOnSelect: false, bell: 'visual', optionIsMeta: true },
   window: { opacity: 1, padding: 6, gap: 4 },
   shell: { program: '', integration: true },
-  app: { restoreSessions: true, confirmQuit: true },
+  app: { restoreSessions: true, confirmQuit: true, recordCommands: true },
   keys: {},
   themes: {}
 }
@@ -52,7 +52,7 @@ export const RULES: Record<string, Record<string, [Check, string]>> = {
   },
   window: { opacity: [num(0.3, 1), 'a number from 0.3 to 1'], padding: [int(0, 40), 'a whole number from 0 to 40'], gap: [int(0, 40), 'a whole number from 0 to 40'] },
   shell: { program: [str, 'a path to a shell, or "" for $SHELL'], integration: [bool, 'true or false'] },
-  app: { restoreSessions: [bool, 'true or false'], confirmQuit: [bool, 'true or false'] }
+  app: { restoreSessions: [bool, 'true or false'], confirmQuit: [bool, 'true or false'], recordCommands: [bool, 'true or false'] }
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)

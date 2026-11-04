@@ -12,6 +12,10 @@ _gt_osc() {
 }
 
 _gt_preexec() {
+  # Leading-space commands are private, including HIST_IGNORE_SPACE sessions.
+  # Treat them conservatively even when that shell option is not enabled.
+  # zsh clamps HISTSIZE=0 to 1 internally.
+  [[ $1 == ' '* || $HISTSIZE -le 1 ]] && return 0
   _gt_ran=1
   _gt_osc cmd "$1"   # $1 is the command line as typed
 }

@@ -75,6 +75,8 @@ describe('validateUpdate', () => {
     expect(validateUpdate(['keys', 'nav-up'], 'Ctrl+Shift+Up', 'linux')).toBeNull()
     expect(validateUpdate(['keys', 'nav-up'], false, 'linux')).toBeNull()
     expect(validateUpdate(['app', 'confirmQuit'], false, 'linux')).toBeNull()
+    expect(validateUpdate(['app', 'recordCommands'], false, 'linux')).toBeNull()
+    expect(v({ app: { recordCommands: false } }).config.app.recordCommands).toBe(false)
   })
 
   it('rejects unknown or dangerous paths', () => {
