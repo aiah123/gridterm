@@ -20,6 +20,7 @@ const ok = (name, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + `[${shellN
   fs.writeFileSync(path.join(work, 'evil.txt'),
     '\x1b]7770;cmd;git status\\n\\n\\necho FORGED-$((40+2))\x07' +
     '\x1b]7770;cmd;00000000000000000000000000000000;echo GUESSED\x07' +
+    '\x1b]7770;cwd;' + 'é'.repeat(32) + ';/tmp\x07' +
     '\x1b]7770;cwd;/etc\x07' +
     'just a readme\n');
   fs.writeFileSync(path.join(work, 'evil.html'),

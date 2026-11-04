@@ -1,4 +1,5 @@
-import { readFileSync, renameSync, writeFileSync, mkdirSync } from 'node:fs'
+import { chmodSync, closeSync, constants, fchmodSync, openSync, readFileSync, renameSync, writeFileSync, mkdirSync, unlinkSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import type { CommandEntry, FileEntry } from '../shared/api'
 
@@ -56,13 +57,23 @@ export function sanitizeState(raw: unknown): SavedState | null {
 export class StateStore {
   readonly file: string
 
-  constructor(dir: string) {
+  constructor(dir: string, private recordCommands: () => boolean = () => true) {
     this.file = path.join(dir, 'state.json')
   }
 
   load(): SavedState | null {
     try {
-      return sanitizeState(JSON.parse(readFileSync(this.file, 'utf8')))
+      // Migrate permissions from older versions before reading sensitive state.
+      chmodSync(path.dirname(this.file), 0o700)
+      const fd = openSync(this.file, constants.O_RDONLY | constants.O_NOFOLLOW)
+      try {
+        fchmodSync(fd, 0o600)
+        const state = sanitizeState(JSON.parse(readFileSync(fd, 'utf8')))
+        if (state && !this.recordCommands()) for (const s of state.sessions) s.commands = []
+        return state
+      } finally {
+        closeSync(fd)
+      }
     } catch {
       return null
     }
@@ -75,16 +86,28 @@ export class StateStore {
       sessions: state.sessions.map((s) => ({
         ...s,
         // Commands still running at quit have no exit code; they are not saved.
-        commands: s.commands.filter((c) => c.exitCode !== undefined).slice(0, MAX_SAVED_COMMANDS)
+        commands: this.recordCommands() ? s.commands.filter((c) => c.exitCode !== undefined).slice(0, MAX_SAVED_COMMANDS) : []
       }))
     }
+    const tmp = `${this.file}.${randomUUID()}.tmp`
+    let created = false
     try {
-      mkdirSync(path.dirname(this.file), { recursive: true })
-      const tmp = `${this.file}.${process.pid}.tmp`
-      writeFileSync(tmp, JSON.stringify(trimmed, null, 2))
+      mkdirSync(path.dirname(this.file), { recursive: true, mode: 0o700 })
+      chmodSync(path.dirname(this.file), 0o700)
+      const fd = openSync(tmp, 'wx', 0o600)
+      created = true
+      try {
+        writeFileSync(fd, JSON.stringify(trimmed, null, 2))
+      } finally {
+        closeSync(fd)
+      }
       renameSync(tmp, this.file)
     } catch {
       // Saving state is best effort.
+    } finally {
+      if (created) {
+        try { unlinkSync(tmp) } catch { /* Renamed successfully, or already removed. */ }
+      }
     }
   }
 }

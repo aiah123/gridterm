@@ -133,7 +133,9 @@ export class SessionManager {
   /** Was this shell-integration message really sent by the session's shell? */
   verifyNonce(id: number, nonce: unknown): boolean {
     const expected = this.sessions.get(id)?.nonce
-    if (!expected || typeof nonce !== 'string' || nonce.length !== expected.length) return false
+    // String length is not UTF-8 byte length. Reject malformed output before
+    // timingSafeEqual, which throws when its buffers have different lengths.
+    if (!expected || typeof nonce !== 'string' || nonce.length !== 32 || !/^[0-9a-f]{32}$/.test(nonce)) return false
     return timingSafeEqual(Buffer.from(nonce), Buffer.from(expected))
   }
 

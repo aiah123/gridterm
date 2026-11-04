@@ -43,10 +43,11 @@ __gt_preexec() {
     num=${BASH_REMATCH[1]}
     line=${BASH_REMATCH[2]}
   fi
-  # History can be off, or skip this command (ignorespace/ignoredups).
-  if [ -z "$num" ] || [ "$num" = "$__gt_last_hist" ]; then
-    line=$1
-  fi
+  # Only record commands bash accepted into history. Falling back to
+  # BASH_COMMAND would leak commands excluded by ignorespace/HISTIGNORE,
+  # or while history is disabled.
+  [[ -o history ]] || return 0
+  if [ -z "$num" ] || [ "$num" = "$__gt_last_hist" ]; then return 0; fi
   __gt_last_hist=$num
   __gt_ran=1
   __gt_osc cmd "$line"
@@ -56,6 +57,15 @@ __gt_precmd() {
   local ec=$?
   if [ "$__gt_ran" = 1 ]; then __gt_osc done "$ec"; fi
   __gt_ran=0
+  # Remember the prompt's history position, including pre-existing history.
+  # An excluded first command must not replay a stale history entry.
+  local last
+  last=$(HISTTIMEFORMAT= builtin history 1)
+  if [[ $last =~ ^[[:space:]]*([0-9]+)[[:space:]] ]]; then
+    __gt_last_hist=${BASH_REMATCH[1]}
+  else
+    __gt_last_hist=""
+  fi
   __gt_osc cwd "$PWD"
   return $ec
 }

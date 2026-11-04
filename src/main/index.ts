@@ -86,12 +86,13 @@ const tracker = new ContextTracker(
     win?.webContents.send('ctx:update', id, ctx)
     scheduleSave()
   },
-  () => sessions.list()
+  () => sessions.list(),
+  () => config.get().config.app.recordCommands
 )
 
 // ---- Saving and restoring sessions ----
 
-const store = new StateStore(config.dir)
+const store = new StateStore(config.dir, () => config.get().config.app.recordCommands)
 /** Sessions saved at the last quit; handed to the renderer once. */
 let restore: SavedState | null = null
 let restoreOffered = false
@@ -190,6 +191,11 @@ let bindings: Binding[] = []
 let shortcutsSuspended = false
 
 function applyConfig(rc: ResolvedConfig): void {
+  if (!rc.config.app.recordCommands) {
+    tracker.clearCommands()
+    if (restore) for (const saved of restore.sessions) saved.commands = []
+  }
+  scheduleSave()
   bindings = buildBindings(rc.keys, process.platform)
   buildMenu(rc)
   win?.setOpacity(rc.config.window.opacity)

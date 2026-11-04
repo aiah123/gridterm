@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -32,6 +32,57 @@ describe('sanitizeState', () => {
 })
 
 describe('StateStore', () => {
+  it('migrates existing permissions and keeps atomic replacements private', () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'gt-state-private-'))
+    try {
+      const store = new StateStore(dir)
+      const state = { version: 1 as const, activeIndex: 0, sessions: [] }
+      chmodSync(dir, 0o755)
+      writeFileSync(store.file, JSON.stringify(state), { mode: 0o644 })
+      expect(store.load()).toEqual(state)
+      expect(statSync(dir).mode & 0o777).toBe(0o700)
+      expect(statSync(store.file).mode & 0o777).toBe(0o600)
+      store.save(state)
+      expect(statSync(store.file).mode & 0o777).toBe(0o600)
+      expect(readdirSync(dir)).toEqual(['state.json'])
+      const nested = new StateStore(path.join(dir, 'new'))
+      nested.save(state)
+      expect(statSync(path.dirname(nested.file)).mode & 0o777).toBe(0o700)
+      expect(statSync(nested.file).mode & 0o777).toBe(0o600)
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+
+  it('does not follow a state-file symlink or change its target permissions', () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'gt-state-link-'))
+    try {
+      const target = path.join(dir, 'target')
+      writeFileSync(target, 'keep', { mode: 0o644 })
+      chmodSync(target, 0o644)
+      const store = new StateStore(dir)
+      symlinkSync(target, store.file)
+      expect(store.load()).toBeNull()
+      expect(statSync(target).mode & 0o777).toBe(0o644)
+      store.save({ version: 1, activeIndex: 0, sessions: [] })
+      expect(readFileSync(target, 'utf8')).toBe('keep')
+      expect(store.load()?.sessions).toEqual([])
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+
+  it('does not restore or persist commands when recording is disabled', () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'gt-state-optout-'))
+    try {
+      let recording = true
+      const store = new StateStore(dir, () => recording)
+      const state = { version: 1 as const, activeIndex: 0, sessions: [{ name: 'test', cwd: '/tmp', files: [], commands: [{ command: 'SECRET=dummy', cwd: '/tmp', startedAt: 1, exitCode: 0 }] }] }
+      store.save(state)
+      recording = false
+      expect(store.load()!.sessions[0].commands).toEqual([])
+      store.save(state)
+      expect(readFileSync(store.file, 'utf8')).not.toContain('SECRET')
+      expect(state.sessions[0].commands).toHaveLength(1)
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+
   it('round-trips and drops still-running commands', () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), 'gt-state-'))
     const store = new StateStore(dir)

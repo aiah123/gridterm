@@ -64,6 +64,20 @@ function home(files = {}) {
     ok(`[${shellName}] every message carries the nonce`, messages.length > 0 && messages.every((m) => m.nonce === NONCE));
     ok(`[${shellName}] user startup files still load`, output.includes('from-user-rc'));
     ok(`[${shellName}] nonce hidden from programs`, output.includes('N=[]') && !output.includes(`N=[${NONCE}]`));
+
+    const privacyRc = shellName === 'bash'
+      ? { '.profile': 'HISTCONTROL=ignorespace\nHISTIGNORE="*PRIVATE_PATTERN*"\nhistory -s stale-entry\n' }
+      : { '.zshrc': 'HISTSIZE=100\nsetopt HIST_IGNORE_SPACE\n' };
+    const privacyHome = home(privacyRc);
+    const lines = shellName === 'bash'
+      ? [' SECRET=PRIVATE_SPACE', 'echo visible', 'SECRET=PRIVATE_PATTERN', 'set +o history', 'SECRET=PRIVATE_DISABLED', 'set -o history', 'echo resumed', 'exit']
+      : [' SECRET=PRIVATE_SPACE', 'echo visible', 'HISTSIZE=0', 'SECRET=PRIVATE_DISABLED', 'HISTSIZE=100', 'echo resumed', 'exit'];
+    const privacy = await runShell(shell, privacyHome, lines);
+    const recorded = privacy.messages.filter((m) => m.kind === 'cmd').map((m) => m.payload);
+    ok(`[${shellName}] excluded secrets are not reported`, !recorded.some((c) => c.includes('PRIVATE_')), recorded);
+    ok(`[${shellName}] recording resumes after history is enabled`, recorded.includes('echo visible') && recorded.includes('echo resumed'), recorded);
+    const completed = privacy.messages.filter((m) => m.kind === 'done');
+    ok(`[${shellName}] excluded commands do not emit completion events`, completed.length === recorded.filter((c) => c !== 'exit').length, privacy.messages);
   }
 
   // bash 5.1+ with an array PROMPT_COMMAND plus another tool's hook (as systemd's
